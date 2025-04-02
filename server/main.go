@@ -101,12 +101,18 @@ func handleConnection(conn net.Conn) {
 	fmt.Println("📡 Client Connected:", conn.RemoteAddr())
 
 	var lastSpeakers []Speaker
-	speakerStates := make(map[int]bool) // เก็บสถานะไมค์ของแต่ละที่นั่ง
+	speakerStates := make(map[int]bool)
 
 	for {
 		speakers, err := getSpeakers()
 		if err != nil {
 			fmt.Println("⚠️ ไม่สามารถดึงข้อมูล speakers:", err)
+			// ส่ง XML ว่างเมื่อไม่มีข้อมูลจาก API
+			emptyXML := `<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="` + time.Now().Format("2006-01-02T15:04:05") + `" Topic="Discussion" Type="ActiveListUpdated"><Discussion Id="80"><ActiveList><Participants></Participants></ActiveList></Discussion></DiscussionActivity>`
+			if err := sendXML(conn, 3, emptyXML); err != nil {
+				fmt.Printf("❌ ไม่สามารถส่ง Discussion Activity: %v\n", err)
+				return
+			}
 			time.Sleep(time.Second)
 			continue
 		}
