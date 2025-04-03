@@ -1,0 +1,37 @@
+📝 Raw data: [05 00 00 00 88 02 00 00 3c 3f 78 6d 6c 20 76 65]
+📨 พบ Header - Topic: 5, Length: 648 bytes
+
+🎙️ การเปลี่ยนแปลง: A05 🟢 เปิด
+
+📜 Topic: 5 (Seat Activity)
+<?xml version="1.0" encoding="utf-8"?><SeatActivity xmlns:_xmlns="xmlns" _xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" _xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="2025-04-03T16:33:04" Topic="Seat" Type="SeatUpdated">
+  <Seat Id="3539">
+    <SeatData Name="A05" MicrophoneActive="true" SeatType="Delegate" IsSpecialStation="false"></SeatData>
+    <Participant Id="0">
+      <ParticipantData Present="false" VotingWeight="1" VotingAuthorisation="true" MicrophoneAuthorisation="true" FirstName="" MiddleName="" LastName="A05" Title="" Country="" RemainingSpeechTime="-1" SpeechTimerOnHold="false"></ParticipantData>
+    </Participant>
+    <IsReposnding>false</IsReposnding>
+  </Seat>
+</SeatActivity>
+--------------------------------------------------------------------------------
+📝 Raw data: [03 00 00 00 2a 02 00 00 3c 3f 78 6d 6c 20 76 65]
+📨 พบ Header - Topic: 3, Length: 554 bytes
+
+🎙️ สถานะไมค์ทั้งหมด:
+   A05: 🟢 เปิด
+
+📜 Topic: 3 (Discussion Activity)
+<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:_xmlns="xmlns" _xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" _xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="2025-04-03T16:33:04" Topic="Discussion" Type="ActiveListUpdated">
+  <Discussion Id="71">
+    <ActiveList>
+      <Participants>
+        <ParticipantContainer Id="0">
+          <Seat Id="3539">
+            <SeatData Name="A05" MicrophoneActive="true" SeatType="Delegate" IsSpecialStation="false"></SeatData>
+            <IsReposnding>false</IsReposnding>
+          </Seat>
+        </ParticipantContainer>
+      </Participants>
+    </ActiveList>
+  </Discussion>
+</DiscussionActivity>

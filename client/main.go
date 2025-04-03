@@ -307,6 +307,38 @@ func handleConnection(conn net.Conn, proxy *ProxyServer) {
 			}
 			fmt.Printf("📝 Raw data: [% x]\n", data[:debugLen])
 
+			// บันทึก raw data ลงไฟล์
+			filename := fmt.Sprintf("raw_data_%s.txt", time.Now().Format("20060102_150405"))
+			f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Printf("❌ ไม่สามารถสร้างไฟล์ได้: %v\n", err)
+			} else {
+				defer f.Close()
+
+				// วิเคราะห์โครงสร้างข้อมูล
+				fmt.Fprintf(f, "=== Raw Data Analysis ===\n")
+				fmt.Fprintf(f, "Total Length: %d bytes\n\n", len(data))
+
+				// Header (8 bytes)
+				fmt.Fprintf(f, "1. Header (8 bytes):\n")
+				fmt.Fprintf(f, "   Topic: %d (bytes 0-3: [% x])\n", binary.LittleEndian.Uint32(data[0:4]), data[0:4])
+				fmt.Fprintf(f, "   Length: %d (bytes 4-7: [% x])\n\n", binary.LittleEndian.Uint32(data[4:8]), data[4:8])
+
+				// ตรวจสอบ bytes ที่อยู่ก่อน XML
+				xmlStart := bytes.Index(data[8:], []byte("<?xml"))
+				if xmlStart >= 0 {
+					fmt.Fprintf(f, "2. Pre-XML Data (%d bytes):\n", xmlStart)
+					fmt.Fprintf(f, "   [% x]\n\n", data[8:8+xmlStart])
+				}
+
+				// XML Message
+				xmlData := data[8+xmlStart:]
+				fmt.Fprintf(f, "3. XML Message (%d bytes):\n", len(xmlData))
+				fmt.Fprintf(f, "   %s\n\n", string(xmlData))
+
+				fmt.Printf("💾 บันทึก raw data ลงไฟล์ %s แล้ว\n", filename)
+			}
+
 			// ตรวจสอบว่าเป็น header หรือไม่
 			if data[0] == 0x05 || data[0] == 0x03 { // ถ้าเป็น topic 5 หรือ 3
 				// อ่าน header

@@ -1,0 +1,49 @@
+รับ จาก tcpServer Bosch DCN
+---------------------
+📝 Raw data: [03 00 00 00 72 04 00 00 ff fe 3c 00 3f 00 78 00]
+📨 พบ Header - Topic: 3, Length: 1138 bytes
+
+🎙️ สถานะไมค์ทั้งหมด:
+   A05: 🟢 เปิด
+
+📜 Topic: 3 (Discussion Activity)
+<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:_xmlns="xmlns" _xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" _xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="2025-04-03T16:30:06.0862323+07:00" Topic="Discussion" Type="ActiveListUpdated">
+  <Discussion Id="71">
+    <ActiveList>
+      <Participants>
+        <ParticipantContainer Id="0">
+          <Seat Id="3539">
+            <SeatData Name="A05" MicrophoneActive="true" SeatType="Delegate" IsSpecialStation="false"></SeatData>
+            <IsReposnding>false</IsReposnding>
+          </Seat>
+        </ParticipantContainer>
+      </Participants>
+    </ActiveList>
+  </Discussion>
+</DiscussionActivity>
+
+
+
+สร้าง จาก tcpServer Mockup
+---------------------
+📝 Raw data: [03 00 00 00 2a 02 00 00 3c 3f 78 6d 6c 20 76 65]
+📨 พบ Header - Topic: 3, Length: 554 bytes
+
+🎙️ สถานะไมค์ทั้งหมด:
+   A05: 🟢 เปิด
+
+📜 Topic: 3 (Discussion Activity)
+<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:_xmlns="xmlns" _xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" _xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="2025-04-03T16:33:04" Topic="Discussion" Type="ActiveListUpdated">
+  <Discussion Id="71">
+    <ActiveList>
+      <Participants>
+        <ParticipantContainer Id="0">
+          <Seat Id="3539">
+            <SeatData Name="A05" MicrophoneActive="true" SeatType="Delegate" IsSpecialStation="false"></SeatData>
+            <IsReposnding>false</IsReposnding>
+          </Seat>
+        </ParticipantContainer>
+      </Participants>
+    </ActiveList>
+  </Discussion>
+</DiscussionActivity>
