@@ -14,7 +14,7 @@ import (
 
 const (
 	PORT    = "20000" // TCP Port
-	API_URL = "http://10.106.0.30:3000/api/speakers"
+	API_URL = "http://localhost:3000/api/speakers"
 )
 
 // โครงสร้างข้อมูลจาก API
