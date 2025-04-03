@@ -8,15 +8,17 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 )
 
 const (
-	SERVER_HOST     = "172.20.1.229" // IP address ของ Bosch DCN server
-	SERVER_PORT     = "20000"        // พอร์ตของ server
-	CONNECT_TIMEOUT = 5              // timeout การเชื่อมต่อ (วินาที)
-	READ_TIMEOUT    = 10             // timeout การรับข้อมูล (วินาที)
+	SERVER_HOST     = "localhost" // IP address ของ Bosch DCN server
+	SERVER_PORT     = "20000"     // พอร์ตของ server
+	PROXY_PORT      = "20001"     // พอร์ตสำหรับ proxy
+	CONNECT_TIMEOUT = 5           // timeout การเชื่อมต่อ (วินาที)
+	READ_TIMEOUT    = 10          // timeout การรับข้อมูล (วินาที)
 )
 
 // ฟังก์ชันสำหรับถอดรหัส header ที่เข้ารหัสมาแล้ว
@@ -190,7 +192,92 @@ func utf16LEToString(b []byte) string {
 	return string(utf16.Decode(utf16Words))
 }
 
-func handleConnection(conn net.Conn) {
+// โครงสร้างสำหรับเก็บข้อมูล client
+type Client struct {
+	conn net.Conn
+	id   int
+}
+
+// ฟังก์ชันสำหรับส่งข้อมูลไปยัง client
+func (c *Client) Send(data []byte) error {
+	_, err := c.conn.Write(data)
+	return err
+}
+
+// ProxyServer จัดการการเชื่อมต่อของ clients
+type ProxyServer struct {
+	clients    map[int]*Client
+	nextID     int
+	clientLock sync.Mutex
+}
+
+// สร้าง ProxyServer ใหม่
+func NewProxyServer() *ProxyServer {
+	return &ProxyServer{
+		clients: make(map[int]*Client),
+		nextID:  1,
+	}
+}
+
+// เพิ่ม client ใหม่
+func (p *ProxyServer) AddClient(conn net.Conn) *Client {
+	p.clientLock.Lock()
+	defer p.clientLock.Unlock()
+
+	client := &Client{
+		conn: conn,
+		id:   p.nextID,
+	}
+	p.clients[p.nextID] = client
+	p.nextID++
+
+	fmt.Printf("👥 Client %d เชื่อมต่อ: %s\n", client.id, conn.RemoteAddr())
+	return client
+}
+
+// ลบ client
+func (p *ProxyServer) RemoveClient(id int) {
+	p.clientLock.Lock()
+	defer p.clientLock.Unlock()
+
+	if client, exists := p.clients[id]; exists {
+		fmt.Printf("👋 Client %d ยกเลิกการเชื่อมต่อ: %s\n", id, client.conn.RemoteAddr())
+		client.conn.Close()
+		delete(p.clients, id)
+	}
+}
+
+// ส่งข้อมูลไปยังทุก clients
+func (p *ProxyServer) Broadcast(data []byte) {
+	p.clientLock.Lock()
+	defer p.clientLock.Unlock()
+
+	for id, client := range p.clients {
+		err := client.Send(data)
+		if err != nil {
+			fmt.Printf("⚠️ ไม่สามารถส่งข้อมูลไปยัง Client %d: %v\n", id, err)
+			// ถ้าส่งไม่ได้ให้ลบ client ออก
+			go p.RemoveClient(id)
+		}
+	}
+}
+
+// จัดการการเชื่อมต่อจาก client
+func handleClientConnection(proxy *ProxyServer, conn net.Conn) {
+	client := proxy.AddClient(conn)
+	defer proxy.RemoveClient(client.id)
+
+	// รอรับข้อมูลจาก client (ถ้าต้องการในอนาคต)
+	buffer := make([]byte, 4096)
+	for {
+		_, err := conn.Read(buffer)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func handleConnection(conn net.Conn, proxy *ProxyServer) {
 	defer conn.Close()
 
 	fmt.Printf("🔗 เชื่อมต่อกับ %s:%s สำเร็จ\n", SERVER_HOST, SERVER_PORT)
@@ -234,6 +321,10 @@ func handleConnection(conn net.Conn) {
 					remainingData = data
 					break
 				}
+
+				// ส่งข้อมูลทั้ง header และ XML ไปยัง clients
+				messageData := data[:8+length]
+				proxy.Broadcast(messageData)
 
 				// อ่าน XML message
 				xmlMessage := data[8 : 8+length]
@@ -280,7 +371,32 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
-	// เชื่อมต่อไปยัง server
+	// สร้าง proxy server
+	proxy := NewProxyServer()
+
+	// เริ่ม proxy server
+	proxyListener, err := net.Listen("tcp", ":"+PROXY_PORT)
+	if err != nil {
+		fmt.Printf("❌ ไม่สามารถเริ่ม proxy server ได้: %v\n", err)
+		os.Exit(1)
+	}
+	defer proxyListener.Close()
+
+	fmt.Printf("🚀 Proxy server กำลังทำงานที่พอร์ต %s\n", PROXY_PORT)
+
+	// รับการเชื่อมต่อจาก clients ในพื้นหลัง
+	go func() {
+		for {
+			clientConn, err := proxyListener.Accept()
+			if err != nil {
+				fmt.Printf("⚠️ ไม่สามารถรับการเชื่อมต่อจาก client ได้: %v\n", err)
+				continue
+			}
+			go handleClientConnection(proxy, clientConn)
+		}
+	}()
+
+	// เชื่อมต่อไปยัง Bosch DCN server
 	serverAddr := fmt.Sprintf("%s:%s", SERVER_HOST, SERVER_PORT)
 	fmt.Printf("🔄 กำลังเชื่อมต่อไปยัง %s...\n", serverAddr)
 
@@ -296,5 +412,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	handleConnection(conn)
+	// จัดการการเชื่อมต่อกับ Bosch DCN server
+	handleConnection(conn, proxy)
 }
