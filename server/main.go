@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	PORT    = "20000" // TCP Port
-	API_URL = "http://192.168.1.125:3000/api/speakers"
+	PORT     = "20000" // TCP Port
+	API_URL  = "http://192.168.1.125:3000/api/speakers"
+	USE_MOCK = true // true = ใช้ข้อมูล mock, false = ใช้ API จริง
 )
 
 // โครงสร้างข้อมูลจาก API
@@ -28,6 +29,11 @@ type Speaker struct {
 	ParticipantID int    `json:"participantId"`
 	MicOn         bool   `json:"micOn"`
 }
+
+var (
+	mockMicState = true
+	lastToggle   = time.Now()
+)
 
 // Client เก็บข้อมูลของ client ที่เชื่อมต่อ
 type Client struct {
@@ -99,8 +105,34 @@ func (s *Server) Broadcast(data []byte) {
 	}
 }
 
-// ฟังก์ชันดึงข้อมูลจาก API
+// ฟังก์ชันจำลองข้อมูล API
+func getMockSpeakers() ([]Speaker, error) {
+	// สลับสถานะไมค์ทุก 5 วินาที
+	if time.Since(lastToggle) >= 5*time.Second {
+		mockMicState = !mockMicState
+		lastToggle = time.Now()
+		fmt.Printf("🔄 สลับสถานะไมค์เป็น: %v\n", mockMicState)
+	}
+
+	return []Speaker{
+		{
+			ID:            23,
+			Name:          "Seat 9",
+			SeatName:      "0009",
+			Prio:          false,
+			PrioOn:        false,
+			ParticipantID: 65535,
+			MicOn:         mockMicState,
+		},
+	}, nil
+}
+
+// ฟังก์ชันดึงข้อมูล (เลือกระหว่าง API จริงหรือ mock)
 func getSpeakers() ([]Speaker, error) {
+	if USE_MOCK {
+		return getMockSpeakers()
+	}
+
 	resp, err := http.Get(API_URL)
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถเชื่อมต่อกับ API: %v", err)
