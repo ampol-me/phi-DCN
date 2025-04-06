@@ -16,7 +16,7 @@ import (
 
 const (
 	PORT     = "20000" // TCP Port
-	API_URL  = "http://192.168.1.125:3000/api/speakers"
+	API_URL  = "http://10.115.206.10/api/speakers"
 	USE_MOCK = true // true = ใช้ข้อมูล mock, false = ใช้ API จริง
 )
 
@@ -134,7 +134,17 @@ func getSpeakers() ([]Speaker, error) {
 		return getMockSpeakers()
 	}
 
-	resp, err := http.Get(API_URL)
+	// สร้าง request ใหม่
+	req, err := http.NewRequest("GET", API_URL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ไม่สามารถสร้าง request: %v", err)
+	}
+
+	// เพิ่ม Header สำหรับการตรวจสอบสิทธิ์
+	req.Header.Set("Bosch-Sid", "2b02c568b849db5538daf19ec76302c3f227c6963b5dfe5363268cee5e84d68be13b5abc7e101c7cd9b4a3faf366a340632735d3508e64900f8aa8eca13e4984")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ไม่สามารถเชื่อมต่อกับ API: %v", err)
 	}
