@@ -69,7 +69,7 @@ func (s *Server) AddClient(conn net.Conn) *Client {
 	s.clients[s.nextID] = client
 	s.nextID++
 
-	fmt.Printf("👥 Client %d เชื่อมต่อ: %s\n", client.id, conn.RemoteAddr())
+	fmt.Printf("👥 Client %d connected: %s\n", client.id, conn.RemoteAddr())
 	return client
 }
 
@@ -79,7 +79,7 @@ func (s *Server) RemoveClient(id int) {
 	defer s.clientLock.Unlock()
 
 	if client, exists := s.clients[id]; exists {
-		fmt.Printf("👋 Client %d ยกเลิกการเชื่อมต่อ: %s\n", id, client.conn.RemoteAddr())
+		fmt.Printf("👋 Client %d disconnected: %s\n", id, client.conn.RemoteAddr())
 		client.conn.Close()
 		delete(s.clients, id)
 	}
@@ -95,7 +95,7 @@ func (s *Server) Broadcast(data []byte) {
 	for id, client := range s.clients {
 		_, err := client.conn.Write(data)
 		if err != nil {
-			fmt.Printf("⚠️ ไม่สามารถส่งข้อมูลไปยัง Client %d: %v\n", id, err)
+			fmt.Printf("⚠️ Cannot send data to Client %d: %v\n", id, err)
 			disconnectedClients = append(disconnectedClients, id)
 		}
 	}
@@ -112,7 +112,7 @@ func getMockSpeakers() ([]Speaker, error) {
 	if time.Since(lastToggle) >= 5*time.Second {
 		mockMicState = !mockMicState
 		lastToggle = time.Now()
-		fmt.Printf("🔄 สลับสถานะไมค์เป็น: %v\n", mockMicState)
+		fmt.Printf("🔄 Toggle mic state to: %v\n", mockMicState)
 	}
 
 	return []Speaker{
@@ -137,7 +137,7 @@ func getSpeakers() ([]Speaker, error) {
 	// สร้าง request ใหม่
 	req, err := http.NewRequest("GET", API_URL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("ไม่สามารถสร้าง request: %v", err)
+		return nil, fmt.Errorf("Failed to create request: %v", err)
 	}
 
 	// เพิ่ม Header สำหรับการตรวจสอบสิทธิ์
@@ -146,18 +146,18 @@ func getSpeakers() ([]Speaker, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("ไม่สามารถเชื่อมต่อกับ API: %v", err)
+		return nil, fmt.Errorf("Failed to connect to API: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("ไม่สามารถอ่านข้อมูลจาก API: %v", err)
+		return nil, fmt.Errorf("Failed to read data from API: %v", err)
 	}
 
 	var speakers []Speaker
 	if err := json.Unmarshal(body, &speakers); err != nil {
-		return nil, fmt.Errorf("ไม่สามารถแปลงข้อมูล JSON: %v", err)
+		return nil, fmt.Errorf("Failed to parse JSON data: %v", err)
 	}
 
 	return speakers, nil
@@ -239,7 +239,7 @@ func (s *Server) ProcessAndBroadcast() {
 	for {
 		speakers, err := getSpeakers()
 		if err != nil {
-			fmt.Println("⚠️ ไม่สามารถดึงข้อมูล speakers:", err)
+			fmt.Println("⚠️ Cannot fetch speakers data:", err)
 			// ส่ง XML ว่างเมื่อไม่มีข้อมูลจาก API
 			emptyXML := toUTF16LEString(fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="%s" Topic="Discussion" Type="ActiveListUpdated"><Discussion Id="80"><ActiveList><Participants></Participants></ActiveList></Discussion></DiscussionActivity>`,
 				time.Now().Format("2006-01-02T15:04:05.0000000-07:00")))
@@ -324,12 +324,12 @@ func main() {
 	// เริ่ม server
 	listener, err := net.Listen("tcp", ":"+PORT)
 	if err != nil {
-		fmt.Printf("❌ ไม่สามารถเริ่ม server ได้: %v\n", err)
+		fmt.Printf("❌ Cannot start server: %v\n", err)
 		os.Exit(1)
 	}
 	defer listener.Close()
 
-	fmt.Printf("🚀 Server กำลังทำงานที่พอร์ต %s\n", PORT)
+	fmt.Printf("🚀 Server running on port %s\n", PORT)
 
 	// เริ่มการประมวลผลและส่งข้อมูล
 	go server.ProcessAndBroadcast()
@@ -338,7 +338,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("⚠️ ไม่สามารถรับการเชื่อมต่อจาก client ได้: %v\n", err)
+			fmt.Printf("⚠️ Cannot accept client connection: %v\n", err)
 			continue
 		}
 		go handleClientConnection(server, conn)
