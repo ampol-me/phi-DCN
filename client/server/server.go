@@ -15,8 +15,9 @@ import (
 
 // Client เก็บข้อมูลของ client ที่เชื่อมต่อ
 type Client struct {
-	conn net.Conn
-	id   int
+	conn       net.Conn
+	id         int
+	macAddress string
 }
 
 // Server จัดการการเชื่อมต่อของ clients
@@ -35,18 +36,19 @@ func NewServer() *Server {
 }
 
 // เพิ่ม client ใหม่
-func (s *Server) AddClient(conn net.Conn) *Client {
+func (s *Server) AddClient(conn net.Conn, macAddress string) *Client {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
 	client := &Client{
-		conn: conn,
-		id:   s.nextID,
+		conn:       conn,
+		id:         s.nextID,
+		macAddress: macAddress,
 	}
 	s.clients[s.nextID] = client
 	s.nextID++
 
-	fmt.Printf("👥 Client %d connected: %s\n", client.id, conn.RemoteAddr())
+	fmt.Printf("👥 Client %d connected: %s (MAC: %s)\n", client.id, conn.RemoteAddr(), macAddress)
 	return client
 }
 
@@ -156,11 +158,20 @@ func (s *Server) ProcessAndBroadcast() {
 
 // จัดการการเชื่อมต่อจาก client
 func HandleClientConnection(server *Server, conn net.Conn) {
-	client := server.AddClient(conn)
+	// อ่าน Mac address จาก client
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Printf("⚠️ Cannot read MAC address from client: %v\n", err)
+		conn.Close()
+		return
+	}
+
+	macAddress := string(buffer[:n])
+	client := server.AddClient(conn, macAddress)
 	defer server.RemoveClient(client.id)
 
 	// รอจนกว่า client จะยกเลิกการเชื่อมต่อ
-	buffer := make([]byte, 1024)
 	for {
 		_, err := conn.Read(buffer)
 		if err != nil {

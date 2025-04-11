@@ -20,8 +20,8 @@ type AppConfig struct {
 
 // Config คือ global configuration instance
 var Config = &AppConfig{
-	APIHost:         "localhost",
-	APIPort:         "3001",
+	APIHost:         "0.0.0.0",
+	APIPort:         "3000",
 	APIPath:         "/api/speakers",
 	TCPServerPort:   "20000",
 	APIKey:          "",
@@ -33,7 +33,12 @@ var Config = &AppConfig{
 
 // GetAPIURL คืนค่า URL เต็มของ API
 func (c *AppConfig) GetAPIURL() string {
-	return "http://" + c.APIHost + ":" + c.APIPort + c.APIPath
+	return "http://" + c.APIHost + ":" + c.APIPort + c.APIPath + "?isPolling=true"
+}
+
+// GetAPIKey คืนค่า API Key
+func (c *AppConfig) GetAPIKey() string {
+	return c.APIKey
 }
 
 // UpdateAPIStatus อัปเดตสถานะการเชื่อมต่อ API

@@ -153,21 +153,22 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 
 				// ตรวจสอบการเปลี่ยนแปลงสถานะไมค์
 				lastState, exists := speakerStates[speaker.ID]
-				if !exists || lastState != speaker.MicOn {
+				microphoneActive := speaker.MicOn == 1
+				if !exists || lastState != microphoneActive {
 					// แสดงสถานะในคอนโซล
 					micStatus := "Off 🔴"
-					if speaker.MicOn {
+					if microphoneActive {
 						micStatus = "On 🟢"
 					}
 					fmt.Printf("🎙️ Mic %s: %s\n", speaker.SeatName, micStatus)
 
 					// ส่ง SeatActivity เมื่อสถานะเปลี่ยน
-					seatXML := xml.GenerateSeatXML(speaker, speaker.MicOn)
+					seatXML := xml.GenerateSeatXML(speaker, microphoneActive)
 					header := make([]byte, 8)
 					binary.LittleEndian.PutUint32(header[0:4], 5)
 					binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
 					p.Broadcast(append(header, seatXML...))
-					speakerStates[speaker.ID] = speaker.MicOn
+					speakerStates[speaker.ID] = microphoneActive
 				}
 			}
 

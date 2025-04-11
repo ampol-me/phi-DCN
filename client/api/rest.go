@@ -3,8 +3,11 @@ package api
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
@@ -15,12 +18,32 @@ import (
 func StartRESTServer(port string) {
 	app := fiber.New(fiber.Config{
 		AppName: "DCN TCP Bridge API",
+		// ปรับปรุงการตั้งค่าสำหรับประสิทธิภาพ
+		ReadTimeout:           2 * time.Second,
+		WriteTimeout:          2 * time.Second,
+		IdleTimeout:           5 * time.Second,
+		EnablePrintRoutes:     true,
+		DisableStartupMessage: true,
+		// เพิ่มการตั้งค่าสำหรับ Windows
+		Prefork: false,  // ปิด prefork สำหรับ Windows
+		Network: "tcp4", // ใช้เฉพาะ IPv4
 	})
 
 	// Middleware
 	app.Use(recover.New())
+	app.Use(compress.New(compress.Config{
+		Level: compress.LevelBestSpeed,
+	}))
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Origin, Content-Type, Accept",
+		MaxAge:       3600,
+	}))
 	app.Use(logger.New(logger.Config{
-		Format: "[${time}] ${status} - ${method} ${path} ${latency}\n",
+		Format:     "[${time}] ${status} - ${method} ${path} ${latency}\n",
+		TimeFormat: "2006-01-02 15:04:05",
+		TimeZone:   "Local",
 	}))
 
 	// API endpoints
@@ -28,7 +51,6 @@ func StartRESTServer(port string) {
 	api.Get("/config", handleGetConfig)
 	api.Post("/config", handleUpdateConfig)
 	api.Get("/status", handleStatus)
-	api.Get("/test", handleAPITest)
 	api.Get("/start", handleStartServer)
 	api.Get("/stop", handleStopServer)
 	api.Get("/clients", handleClients)
@@ -85,22 +107,6 @@ func handleStatus(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(status)
-}
-
-// handleAPITest ทดสอบการเชื่อมต่อกับ API
-func handleAPITest(c *fiber.Ctx) error {
-	err := TestConnection()
-	if err != nil {
-		return c.JSON(fiber.Map{
-			"status":  "error",
-			"message": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"status":  "success",
-		"message": "Connected to API successfully",
-	})
 }
 
 // handleStartServer เริ่ม TCP Server

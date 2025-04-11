@@ -36,7 +36,7 @@ func GenerateDiscussionXML(speakers []api.Speaker) []byte {
 	participantsXML := ""
 
 	for _, speaker := range speakers {
-		if speaker.MicOn {
+		if speaker.MicOn == 1 {
 			hasMicOn = true
 			participantXML := fmt.Sprintf(`<ParticipantContainer Id="%d"><Seat Id="%d"><SeatData Name="%s" MicrophoneActive="true" SeatType="Delegate" IsSpecialStation="false" /><IsReposnding>false</IsReposnding></Seat></ParticipantContainer>`,
 				speaker.ParticipantID,
