@@ -16,7 +16,7 @@ const (
 )
 
 func main() {
-	fmt.Println("======= Phila Live DCN - TCP Bridge =======")
+	fmt.Println("======= Phi DCN Bridge (TCP Server) =======")
 	fmt.Println("Initializing application...")
 
 	// ตั้งค่าเริ่มต้น
@@ -32,15 +32,10 @@ func main() {
 	// จัดการกับสัญญาณหยุดการทำงาน (Ctrl+C)
 	setupSignalHandler()
 
-	// เริ่ม REST API ด้วย GoFiber
-	fmt.Println("🔄 Using GoFiber for REST API")
-	fmt.Printf("🚀 Starting REST API on port %s\n", apiPort)
-	fmt.Println("You can use the following API endpoints:")
-	fmt.Println("- GET  /api/status      : View connection status")
-	fmt.Println("- GET  /api/clients     : View connected clients")
-	fmt.Println("- GET  /api/mics        : View active microphones")
-	fmt.Println("Press Ctrl+C to exit the application")
+	// เริ่ม SSE connection
+	go api.ProcessSSEEvents()
 
+	// เริ่ม REST API
 	api.StartRESTServer(apiPort)
 }
 
