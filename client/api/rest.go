@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -58,6 +59,12 @@ func StartRESTServer(port string) {
 
 	// เริ่ม server
 	fmt.Printf("🚀 REST API running on port %s\n", port)
+
+	// เริ่ม TCP Server โดยอัตโนมัติเมื่อเริ่ม REST API
+	go func() {
+		config.StartTCPServer()
+	}()
+
 	log.Fatal(app.Listen(":" + port))
 }
 
@@ -76,6 +83,9 @@ func handleUpdateConfig(c *fiber.Ctx) error {
 		})
 	}
 
+	// หยุด TCP Server ก่อนอัปเดตการตั้งค่า
+	config.StopTCPServer()
+
 	// อัปเดตค่าตั้งค่า
 	if newConfig.APIHost != "" {
 		config.Config.APIHost = newConfig.APIHost
@@ -93,9 +103,14 @@ func handleUpdateConfig(c *fiber.Ctx) error {
 		config.Config.TCPServerPort = newConfig.TCPServerPort
 	}
 
+	// เริ่ม TCP Server ใหม่
+	go func() {
+		config.StartTCPServer()
+	}()
+
 	return c.JSON(fiber.Map{
 		"status":  "success",
-		"message": "Configuration updated successfully",
+		"message": "Configuration updated and server restarted successfully",
 	})
 }
 
@@ -144,9 +159,51 @@ func handleStopServer(c *fiber.Ctx) error {
 func handleClients(c *fiber.Ctx) error {
 	clients := config.Config.GetActiveClients()
 
+	// สร้างโครงสร้างข้อมูลใหม่
+	type ClientInfo struct {
+		ID          string `json:"id"`
+		IPAddress   string `json:"ipaddress"`
+		Time        string `json:"time"`
+		Telemetrics bool   `json:"telemetrics"`
+	}
+
+	clientList := make([]ClientInfo, 0)
+
+	for ip, info := range clients {
+		// แยกข้อมูลจาก info string
+		parts := strings.Split(info, ", ")
+		var id, time string
+
+		// แยก ID
+		if len(parts) > 0 {
+			idParts := strings.Split(parts[0], ": ")
+			if len(idParts) > 1 {
+				id = strings.TrimSpace(idParts[1])
+			}
+		}
+
+		// แยก Time
+		if len(parts) > 1 {
+			timeParts := strings.Split(parts[1], ": ")
+			if len(timeParts) > 1 {
+				time = strings.TrimSpace(timeParts[1])
+			}
+		}
+
+		// ตรวจสอบ telemetrics ตาม IP
+		telemetrics := ip == "10.115.206.37"
+
+		clientList = append(clientList, ClientInfo{
+			ID:          id,
+			IPAddress:   ip,
+			Time:        time,
+			Telemetrics: telemetrics,
+		})
+	}
+
 	return c.JSON(fiber.Map{
+		"clients": clientList,
 		"count":   len(clients),
-		"clients": clients,
 	})
 }
 
