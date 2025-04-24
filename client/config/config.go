@@ -96,6 +96,15 @@ func (c *AppConfig) UpdateActiveMic(seatName string, active bool) {
 	}
 }
 
+// ClearInactiveMics ล้างข้อมูลไมค์ที่ไม่ได้ใช้งานแล้ว
+func (c *AppConfig) ClearInactiveMics() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// ล้างข้อมูลไมค์ทั้งหมด
+	c.ActiveMics = make(map[string]bool)
+}
+
 // GetActiveMics ดึงรายการไมค์ที่กำลังเปิดอยู่
 func (c *AppConfig) GetActiveMics() []string {
 	c.mu.RLock()

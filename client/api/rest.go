@@ -209,6 +209,7 @@ func handleClients(c *fiber.Ctx) error {
 
 // handleMics แสดงรายการไมค์ที่เปิดอยู่
 func handleMics(c *fiber.Ctx) error {
+	// ดึงข้อมูลไมค์ที่กำลังใช้งาน
 	mics := config.Config.GetActiveMics()
 
 	return c.JSON(fiber.Map{

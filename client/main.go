@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"phi-DCN/client/api"
@@ -16,7 +17,6 @@ const (
 )
 
 func main() {
-	//fmt.Println("======= Phi DCN Bridge (TCP Server) =======")
 	fmt.Println("Initializing application...")
 
 	// ตั้งค่าเริ่มต้น
@@ -34,6 +34,13 @@ func main() {
 
 	// เริ่ม REST API
 	api.StartRESTServer(apiPort)
+
+	// สำหรับ Windows GUI
+	if runtime.GOOS == "windows" {
+		// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
+	}
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน

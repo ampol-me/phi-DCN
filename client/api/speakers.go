@@ -79,7 +79,7 @@ func GetSpeakers() ([]Speaker, error) {
 
 	// อัปเดตสถานะไมค์ที่กำลังใช้งาน
 	for _, speaker := range speakers {
-		config.Config.UpdateActiveMic(speaker.Name, speaker.MicOn == 1)
+		config.Config.UpdateActiveMic(speaker.SeatName, speaker.MicOn == 1)
 	}
 
 	return speakers, nil
