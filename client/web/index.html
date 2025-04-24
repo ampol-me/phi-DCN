@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phi DCN Bridge</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Phi DCN Bridge</h1>
+            <div class="status">
+                <span id="serverStatus">Server Status: Checking...</span>
+                <button id="startStopBtn">Start Server</button>
+            </div>
+        </header>
+
+        <main>
+            <section class="config-section">
+                <h2>Configuration</h2>
+                <form id="configForm">
+                    <div class="form-group">
+                        <label for="apiHost">API Host:</label>
+                        <input type="text" id="apiHost" name="apiHost">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiPort">API Port:</label>
+                        <input type="text" id="apiPort" name="apiPort">
+                    </div>
+                    <div class="form-group">
+                        <label for="tcpPort">TCP Port:</label>
+                        <input type="text" id="tcpPort" name="tcpPort">
+                    </div>
+                    <button type="submit">Save Configuration</button>
+                </form>
+            </section>
+
+            <section class="clients-section">
+                <h2>Connected Clients</h2>
+                <div id="clientsList"></div>
+            </section>
+
+            <section class="mics-section">
+                <h2>Active Microphones</h2>
+                <div id="micsList"></div>
+            </section>
+        </main>
+    </div>
+    <script src="/script.js"></script>
+</body>
+</html> 

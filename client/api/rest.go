@@ -22,8 +22,8 @@ func StartRESTServer(port string) {
 		ReadTimeout:           2 * time.Second,
 		WriteTimeout:          2 * time.Second,
 		IdleTimeout:           5 * time.Second,
-		EnablePrintRoutes:     true,
-		DisableStartupMessage: true,
+		EnablePrintRoutes:     false,
+		DisableStartupMessage: false,
 		// เพิ่มการตั้งค่าสำหรับ Windows
 		Prefork: false,  // ปิด prefork สำหรับ Windows
 		Network: "tcp4", // ใช้เฉพาะ IPv4
