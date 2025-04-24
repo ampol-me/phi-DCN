@@ -11,36 +11,74 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR/.."
 
-# บันทึกวันที่และเวลาปัจจุบัน
-BUILD_DATE=$(date +"%Y-%m-%d_%H-%M-%S")
-VERSION="1.0.0"
-
-# สร้างโฟลเดอร์สำหรับเก็บไฟล์ที่ build
-mkdir -p build/client/mac
-
-echo -e "${BLUE}🔨 Building phi-DCN version ${VERSION} (${BUILD_DATE})${NC}"
-
-# ตรวจสอบว่าเป็น Apple Silicon หรือ Intel
-if [[ $(uname -m) == "arm64" ]]; then
-  ARCH="arm64"
-  echo -e "${GREEN}🍎 Detected Apple Silicon (M1/M2)${NC}"
-else
-  ARCH="amd64"
-  echo -e "${GREEN}🍎 Detected Intel Mac${NC}"
+# Get version from git branch
+VERSION=$(git rev-parse --abbrev-ref HEAD | sed 's/[^0-9.]//g')
+if [ -z "$VERSION" ]; then
+    VERSION="1.0.0"
 fi
 
-# Build สำหรับ Mac
-echo -e "${YELLOW}📦 Building client for macOS (${ARCH})...${NC}"
-GOOS=darwin GOARCH=${ARCH} go build -o build/client/mac/phi-dcn-client ./client
+echo -e "${BLUE}🔨 Building phi-DCN version ${VERSION} for Mac M2${NC}"
 
-echo -e "${YELLOW}📦 Building server for macOS (${ARCH})...${NC}"
-GOOS=darwin GOARCH=${ARCH} go build -o build/server/mac/phi-dcn-server ./server
+# Clean previous builds
+rm -rf build/mac
+rm -f build/phi-dcn-mac
+rm -f build/phi-dcn-mac.zip
+
+# Create build directory
+mkdir -p build/mac
+
+# Build for Mac M2
+GOOS=darwin GOARCH=arm64 go build -o build/mac/phi-dcn-mac ./client
+
+# Create Info.plist
+cat > build/mac/Info.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>phi-dcn-mac</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.phi.dcn</string>
+    <key>CFBundleName</key>
+    <string>Phi DCN</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string>
+    <key>CFBundleVersion</key>
+    <string>$VERSION</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+</dict>
+</plist>
+EOF
+
+# Create README
+cat > build/mac/README.txt << EOF
+Phi DCN Bridge v$VERSION
+=====================
+
+This is the Mac M2 version of Phi DCN Bridge.
+
+Usage:
+1. Open Terminal
+2. Navigate to this directory
+3. Run: ./phi-dcn-mac
+
+For more information, visit: https://github.com/your-repo/phi-DCN
+EOF
+
+# Create ZIP file
+cd build/mac
+zip -r ../phi-dcn-mac-$VERSION.zip *
+cd ../..
 
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 echo -e "${BLUE}📂 Binary files are available in the build/ directory${NC}"
 
 # แสดงไฟล์ที่สร้าง
-ls -la build/client/mac build/server/mac
+ls -la build/mac
 
 # หยุดรอการกดปุ่มจากผู้ใช้
 echo ""
