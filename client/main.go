@@ -16,7 +16,7 @@ const (
 )
 
 func main() {
-	fmt.Println("======= Phi DCN Bridge (TCP Server) =======")
+	//fmt.Println("======= Phi DCN Bridge (TCP Server) =======")
 	fmt.Println("Initializing application...")
 
 	// ตั้งค่าเริ่มต้น
@@ -31,9 +31,6 @@ func main() {
 
 	// จัดการกับสัญญาณหยุดการทำงาน (Ctrl+C)
 	setupSignalHandler()
-
-	// เริ่ม SSE connection
-	go api.ProcessSSEEvents()
 
 	// เริ่ม REST API
 	api.StartRESTServer(apiPort)
