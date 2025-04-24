@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 )
 
 // StartRESTServer เริ่ม REST API server
-func StartRESTServer(port string) {
+func StartRESTServer(port string) error {
 	app := fiber.New(fiber.Config{
 		AppName: "Phi DCN Bridge (XML Server API)",
 		// ปรับปรุงการตั้งค่าสำหรับประสิทธิภาพ
@@ -65,7 +64,7 @@ func StartRESTServer(port string) {
 		config.StartTCPServer()
 	}()
 
-	log.Fatal(app.Listen(":" + port))
+	return app.Listen(":" + port)
 }
 
 // handleGetConfig จัดการคำขอดูการตั้งค่า

@@ -31,6 +31,20 @@ func main() {
 		apiPort = os.Args[1]
 	}
 
+	// จัดการกับสัญญาณหยุดการทำงาน (Ctrl+C)
+	setupSignalHandler()
+
+	// เริ่ม REST API ก่อน
+	fmt.Println("Starting REST API server...")
+	restServerChan := make(chan error, 1)
+	go func() {
+		restServerChan <- api.StartRESTServer(apiPort)
+	}()
+
+	// รอให้ REST API server เริ่มทำงาน
+	fmt.Println("Waiting for REST API server to start...")
+	time.Sleep(2 * time.Second)
+
 	// ตรวจสอบการเชื่อมต่อ API
 	fmt.Println("Checking API connection...")
 	fmt.Printf("Trying to connect to API at: %s\n", config.Config.GetAPIURL())
@@ -52,7 +66,12 @@ func main() {
 			fmt.Printf("- API Port: %s\n", config.Config.APIPort)
 			fmt.Printf("- API Path: %s\n", config.Config.APIPath)
 			fmt.Printf("- API Key: %s\n", config.Config.APIKey)
-			fmt.Println("\nPlease update your configuration before starting the server")
+			fmt.Println("\nPlease update your configuration using:")
+			fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
+
+			// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
+			fmt.Println("\nPress Enter to exit...")
+			fmt.Scanln()
 			os.Exit(1)
 		}
 		fmt.Println("✅ API connection successful")
@@ -67,21 +86,23 @@ func main() {
 		fmt.Printf("- API Port: %s\n", config.Config.APIPort)
 		fmt.Printf("- API Path: %s\n", config.Config.APIPath)
 		fmt.Printf("- API Key: %s\n", config.Config.APIKey)
-		fmt.Println("\nPlease update your configuration before starting the server")
+		fmt.Println("\nPlease update your configuration using:")
+		fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
+
+		// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
+		fmt.Println("\nPress Enter to exit...")
+		fmt.Scanln()
 		os.Exit(1)
 	}
-
-	// จัดการกับสัญญาณหยุดการทำงาน (Ctrl+C)
-	setupSignalHandler()
-
-	// เริ่ม REST API
-	api.StartRESTServer(apiPort)
 
 	// สำหรับ Windows GUI
 	if runtime.GOOS == "windows" {
 		// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
 		fmt.Println("Press Enter to exit...")
 		fmt.Scanln()
+	} else {
+		// สำหรับ Mac/Linux รอให้ REST server หยุดทำงาน
+		<-restServerChan
 	}
 }
 

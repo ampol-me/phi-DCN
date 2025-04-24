@@ -1,4 +1,4 @@
-Phi DCN Bridge v0.0.6
+Phi DCN Bridge v0.0.7
 =====================
 
 This is the Windows version of Phi DCN Bridge.
