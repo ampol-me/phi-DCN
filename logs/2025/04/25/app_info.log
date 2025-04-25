@@ -1,0 +1,9 @@
+INFO: 2025/04/25 15:01:05 main.go:198: Configuration loaded successfully
+INFO: 2025/04/25 15:01:05 main.go:209: Proxy setup completed
+INFO: 2025/04/25 15:01:05 main.go:223: Starting REST API server...
+INFO: 2025/04/25 15:01:05 main.go:231: Waiting for REST API server to start...
+INFO: 2025/04/25 15:01:07 main.go:237: Checking API connection at: http://192.168.88.152:3000/api/speakers
+INFO: 2025/04/25 15:01:07 main.go:273: API connection successful
+INFO: 2025/04/25 15:01:07 main.go:297: Application is ready
+INFO: 2025/04/25 15:01:41 main.go:314: Shutting down application...
+INFO: 2025/04/25 15:01:41 main.go:320: Application closed successfully

@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -34,19 +36,28 @@ var (
 
 // initLogging เริ่มต้นระบบบันทึกข้อมูล
 func initLogging() {
-	// สร้างโฟลเดอร์ logs ถ้ายังไม่มี
-	if _, err := os.Stat("logs"); os.IsNotExist(err) {
-		os.Mkdir("logs", 0755)
+	// สร้างโครงสร้างโฟลเดอร์ logs/YYYY/MM/DD
+	currentTime := time.Now()
+	logsDir := "logs"
+	yearDir := fmt.Sprintf("%s/%d", logsDir, currentTime.Year())
+	monthDir := fmt.Sprintf("%s/%02d", yearDir, currentTime.Month())
+	dayDir := fmt.Sprintf("%s/%02d", monthDir, currentTime.Day())
+
+	// สร้างโฟลเดอร์ทั้งหมด
+	dirs := []string{logsDir, yearDir, monthDir, dayDir}
+	for _, dir := range dirs {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			os.Mkdir(dir, 0755)
+		}
 	}
 
 	// เปิดไฟล์ log
-	currentTime := time.Now().Format("2006-01-02")
-	infoFile, err := os.OpenFile(fmt.Sprintf("logs/app_info_%s.log", currentTime), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	infoFile, err := os.OpenFile(fmt.Sprintf("%s/app_info.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
 
-	errorFile, err := os.OpenFile(fmt.Sprintf("logs/app_error_%s.log", currentTime), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	errorFile, err := os.OpenFile(fmt.Sprintf("%s/app_error.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
@@ -54,13 +65,67 @@ func initLogging() {
 	// สร้าง logger
 	InfoLogger = log.New(infoFile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	ErrorLogger = log.New(errorFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+
+	// ลบ logs เก่าที่เกิน 1 ปี
+	go cleanupOldLogs()
+}
+
+// cleanupOldLogs ลบ logs เก่าที่เกิน 1 ปี
+func cleanupOldLogs() {
+	// รอ 1 นาทีหลังเริ่มแอปพลิเคชันก่อนเริ่มลบ logs
+	time.Sleep(1 * time.Minute)
+
+	// ตรวจสอบทุก 24 ชั่วโมง
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// ดึงปีปัจจุบัน
+			currentYear := time.Now().Year()
+
+			// ตรวจสอบโฟลเดอร์ logs
+			logsDir := "logs"
+			entries, err := os.ReadDir(logsDir)
+			if err != nil {
+				ErrorLogger.Printf("ไม่สามารถอ่านโฟลเดอร์ logs: %v", err)
+				continue
+			}
+
+			// ตรวจสอบแต่ละปี
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+
+				year, err := strconv.Atoi(entry.Name())
+				if err != nil {
+					continue
+				}
+
+				// ถ้าเป็นปีที่เก่ากว่า 1 ปี ให้ลบทั้งโฟลเดอร์
+				if year < currentYear-1 {
+					yearPath := filepath.Join(logsDir, entry.Name())
+					if err := os.RemoveAll(yearPath); err != nil {
+						ErrorLogger.Printf("ไม่สามารถลบโฟลเดอร์ปี %d: %v", year, err)
+					} else {
+						InfoLogger.Printf("ลบ logs ปี %d เรียบร้อยแล้ว", year)
+					}
+				}
+			}
+		}
+	}
 }
 
 // loadLogs โหลดและแสดง logs ใน Text widget
 func loadLogs(logText *widget.TextGrid) {
-	// โหลด logs จากไฟล์
-	currentTime := time.Now().Format("2006-01-02")
-	logFile := fmt.Sprintf("logs/app_info_%s.log", currentTime)
+	// โหลด logs จากไฟล์ของวันนี้
+	currentTime := time.Now()
+	logFile := fmt.Sprintf("logs/%d/%02d/%02d/app_info.log",
+		currentTime.Year(),
+		currentTime.Month(),
+		currentTime.Day())
 
 	content, err := os.ReadFile(logFile)
 	if err != nil {
@@ -99,6 +164,9 @@ func (t *darkTheme) Size(name fyne.ThemeSizeName) float32 {
 }
 
 func main() {
+	// ปิดการแสดงข้อความแจ้งเตือนของ Fyne
+	os.Setenv("FYNE_DEBUG", "0")
+
 	// เริ่มต้นระบบบันทึกข้อมูล
 	initLogging()
 
@@ -123,28 +191,28 @@ func main() {
 
 	// ตั้งค่าเริ่มต้น - โหลดจากไฟล์ config.ini
 	if err := config.InitConfig(); err != nil {
-		logText.SetText(logText.Text() + fmt.Sprintf("❌ ไม่สามารถโหลดการตั้งค่าได้: %v\n", err))
-		ErrorLogger.Printf("ไม่สามารถโหลดการตั้งค่าได้: %v", err)
+		logText.SetText(logText.Text() + fmt.Sprintf("❌ Failed to load configuration: %v\n", err))
+		ErrorLogger.Printf("Failed to load configuration: %v", err)
 		os.Exit(1)
 	}
-	InfoLogger.Println("โหลดการตั้งค่าเรียบร้อยแล้ว")
+	InfoLogger.Println("Configuration loaded successfully")
 
 	// ตรวจสอบความถูกต้องของการตั้งค่า
 	if err := config.Config.ValidateConfig(); err != nil {
-		logText.SetText(logText.Text() + fmt.Sprintf("❌ การตั้งค่าไม่ถูกต้อง: %v\n", err))
-		ErrorLogger.Printf("การตั้งค่าไม่ถูกต้อง: %v", err)
+		logText.SetText(logText.Text() + fmt.Sprintf("❌ Invalid configuration: %v\n", err))
+		ErrorLogger.Printf("Invalid configuration: %v", err)
 		os.Exit(1)
 	}
 
 	// ตั้งค่า proxy
 	proxy.Setup()
-	InfoLogger.Println("ตั้งค่า proxy เรียบร้อยแล้ว")
+	InfoLogger.Println("Proxy setup completed")
 
 	// ตรวจสอบพอร์ตสำหรับ REST API จากอาร์กิวเมนต์
 	apiPort := REST_API_PORT
 	if len(os.Args) > 1 {
 		apiPort = os.Args[1]
-		InfoLogger.Printf("ใช้พอร์ต REST API จากอาร์กิวเมนต์: %s", apiPort)
+		InfoLogger.Printf("Using REST API port from argument: %s", apiPort)
 	}
 
 	// จัดการกับสัญญาณหยุดการทำงาน (Ctrl+C)
@@ -152,7 +220,7 @@ func main() {
 
 	// เริ่ม REST API ก่อน
 	logText.SetText(logText.Text() + "Starting REST API server...\n")
-	InfoLogger.Println("กำลังเริ่ม REST API server...")
+	InfoLogger.Println("Starting REST API server...")
 	restServerChan := make(chan error, 1)
 	go func() {
 		restServerChan <- api.StartRESTServer(apiPort)
@@ -160,13 +228,13 @@ func main() {
 
 	// รอให้ REST API server เริ่มทำงาน
 	logText.SetText(logText.Text() + "Waiting for REST API server to start...\n")
-	InfoLogger.Println("กำลังรอให้ REST API server เริ่มทำงาน...")
+	InfoLogger.Println("Waiting for REST API server to start...")
 	time.Sleep(2 * time.Second)
 
 	// ตรวจสอบการเชื่อมต่อ API
 	logText.SetText(logText.Text() + "Checking API connection...\n")
 	logText.SetText(logText.Text() + fmt.Sprintf("Trying to connect to API at: %s\n", config.Config.GetAPIURL()))
-	InfoLogger.Printf("กำลังตรวจสอบการเชื่อมต่อ API ที่: %s", config.Config.GetAPIURL())
+	InfoLogger.Printf("Checking API connection at: %s", config.Config.GetAPIURL())
 
 	apiCheckChan := make(chan error, 1)
 	go func() {
@@ -186,7 +254,7 @@ func main() {
 	case err := <-apiCheckChan:
 		if err != nil {
 			logText.SetText(logText.Text() + fmt.Sprintf("\n❌ API connection failed: %v\n", err))
-			ErrorLogger.Printf("การเชื่อมต่อ API ล้มเหลว: %v", err)
+			ErrorLogger.Printf("API connection failed: %v", err)
 
 			logText.SetText(logText.Text() + "\nPossible causes:\n")
 			logText.SetText(logText.Text() + "1. API server is not running\n")
@@ -202,10 +270,10 @@ func main() {
 			os.Exit(1)
 		}
 		logText.SetText(logText.Text() + "✅ API connection successful\n")
-		InfoLogger.Println("การเชื่อมต่อ API สำเร็จ")
+		InfoLogger.Println("API connection successful")
 	case <-time.After(API_TIMEOUT):
 		logText.SetText(logText.Text() + fmt.Sprintf("\n❌ API connection timeout after %v\n", API_TIMEOUT))
-		ErrorLogger.Printf("การเชื่อมต่อ API หมดเวลาหลังจาก %v", API_TIMEOUT)
+		ErrorLogger.Printf("API connection timeout after %v", API_TIMEOUT)
 
 		logText.SetText(logText.Text() + "\nPossible causes:\n")
 		logText.SetText(logText.Text() + "1. API server is not responding\n")
@@ -226,7 +294,7 @@ func main() {
 
 	// แสดงข้อความว่าแอปพลิเคชันพร้อมใช้งาน
 	logText.SetText(logText.Text() + "\n✅ Application is ready!\n")
-	InfoLogger.Println("แอปพลิเคชันพร้อมใช้งาน")
+	InfoLogger.Println("Application is ready")
 	logText.SetText(logText.Text() + fmt.Sprintf("- REST API running on port: %s\n", apiPort))
 	logText.SetText(logText.Text() + fmt.Sprintf("- TCP Server running on port: %s\n", config.Config.TCPServerPort))
 	logText.SetText(logText.Text() + fmt.Sprintf("- Connected to API: %s\n\n", config.Config.GetAPIURL()))
@@ -243,13 +311,13 @@ func setupSignalHandler() {
 	go func() {
 		<-c
 		fmt.Println("\nShutting down application...")
-		InfoLogger.Println("กำลังปิดแอปพลิเคชัน...")
+		InfoLogger.Println("Shutting down application...")
 
 		// ทำความสะอาด resources
 		config.Config.ClearInactiveMics()
 
 		fmt.Println("Application closed successfully")
-		InfoLogger.Println("ปิดแอปพลิเคชันเรียบร้อยแล้ว")
+		InfoLogger.Println("Application closed successfully")
 		os.Exit(0)
 	}()
 }
