@@ -467,6 +467,25 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 			}
 		}
 
+		// ส่ง XML ทั้งหมดเมื่อมีการเปลี่ยนแปลง
+		if len(currentSpeakers) > 0 {
+			// ส่ง SeatActivity สำหรับไมค์ที่เปิดอยู่ทั้งหมด
+			for _, speaker := range currentSpeakers {
+				seatXML := xml.GenerateSeatXML(speaker, true)
+				header := make([]byte, 8)
+				binary.LittleEndian.PutUint32(header[0:4], 5)
+				binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
+				p.Broadcast(append(header, seatXML...))
+			}
+
+			// ส่ง DiscussionActivity
+			discussionXML := xml.GenerateDiscussionXML(currentSpeakers)
+			header := make([]byte, 8)
+			binary.LittleEndian.PutUint32(header[0:4], 3)
+			binary.LittleEndian.PutUint32(header[4:8], uint32(len(discussionXML)))
+			p.Broadcast(append(header, discussionXML...))
+		}
+
 		lastSpeakers = speakers
 		time.Sleep(time.Second)
 	}
