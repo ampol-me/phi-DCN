@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -220,19 +221,48 @@ func StartProxy() {
 	// อัปเดตสถานะของ server
 	config.Config.UpdateTCPServerStatus("Initializing...")
 
-	// เริ่ม proxy server
-	proxyListener, err := net.Listen("tcp", ":"+config.Config.TCPServerPort)
-	if err != nil {
+	// เริ่ม proxy server ด้วยการลอง port หลายครั้ง
+	var proxyListener net.Listener
+	var err error
+	maxRetries := 5
+	basePort := config.Config.TCPServerPort
+	currentPort := basePort
+
+	for i := 0; i < maxRetries; i++ {
+		proxyListener, err = net.Listen("tcp", ":"+currentPort)
+		if err == nil {
+			break
+		}
+
+		// ถ้า port ถูกใช้งานอยู่แล้ว ให้ลอง port ถัดไป
+		if strings.Contains(err.Error(), "address already in use") {
+			portNum, _ := strconv.Atoi(currentPort)
+			currentPort = strconv.Itoa(portNum + 1)
+			continue
+		}
+
+		// ถ้าเกิด error อื่นๆ ให้แสดง error และหยุดการทำงาน
 		errMsg := fmt.Sprintf("Cannot start TCP server: %v", err)
 		fmt.Printf("❌ %s\n", errMsg)
 		config.Config.UpdateTCPServerStatus(errMsg)
 		return
 	}
 
+	// ถ้าไม่สามารถหา port ที่ว่างได้
+	if err != nil {
+		errMsg := fmt.Sprintf("Cannot find available port after %d retries", maxRetries)
+		fmt.Printf("❌ %s\n", errMsg)
+		config.Config.UpdateTCPServerStatus(errMsg)
+		return
+	}
+
+	// อัปเดต port ที่ใช้จริงใน config
+	config.Config.TCPServerPort = currentPort
+
 	// อัปเดตสถานะว่า server พร้อมใช้งาน
 	config.Config.UpdateTCPServerStatus("Running")
 
-	fmt.Printf("🚀 TCP Server running on port %s\n", config.Config.TCPServerPort)
+	fmt.Printf("🚀 TCP Server running on port %s\n", currentPort)
 
 	// เริ่มการประมวลผลและส่งข้อมูล
 	go proxy.ProcessAndBroadcast()
