@@ -51,3 +51,23 @@ INFO: 2025/04/25 13:51:45 proxy.go:457: TCP Server initializing...
 INFO: 2025/04/25 13:51:45 proxy.go:493: Listening on port 20001
 INFO: 2025/04/25 13:51:46 proxy.go:368: Mic 0014: On 🟢
 INFO: 2025/04/25 13:51:46 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 14:25:24 proxy.go:457: TCP Server initializing...
+INFO: 2025/04/25 14:25:24 proxy.go:493: Listening on port 20001
+INFO: 2025/04/25 14:25:25 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 14:25:25 proxy.go:368: Mic 0024: On 🟢
+INFO: 2025/04/25 14:26:02 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 14:26:02 proxy.go:388: Mic 0024: Canceled
+INFO: 2025/04/25 14:26:03 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 14:26:03 proxy.go:368: Mic 0023: On 🟢
+INFO: 2025/04/25 14:26:03 proxy.go:368: Mic 0024: On 🟢
+INFO: 2025/04/25 14:26:26 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 14:26:40 proxy.go:388: Mic 0024: Canceled
+INFO: 2025/04/25 14:26:40 proxy.go:388: Mic 0023: Canceled
+INFO: 2025/04/25 14:26:41 proxy.go:368: Mic 0008: On 🟢
+INFO: 2025/04/25 14:26:41 proxy.go:368: Mic 0023: On 🟢
+INFO: 2025/04/25 14:26:41 proxy.go:368: Mic 0024: On 🟢
+INFO: 2025/04/25 14:27:34 proxy.go:388: Mic 0024: Canceled
+INFO: 2025/04/25 14:27:34 proxy.go:388: Mic 0023: Canceled
+INFO: 2025/04/25 14:27:34 proxy.go:388: Mic 0008: Canceled
+INFO: 2025/04/25 14:27:35 proxy.go:368: Mic 0023: On 🟢
+INFO: 2025/04/25 14:27:35 proxy.go:368: Mic 0024: On 🟢

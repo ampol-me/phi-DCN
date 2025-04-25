@@ -2,14 +2,18 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/lxn/walk"
-	. "github.com/lxn/walk/declarative"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"phi-DCN/client/api"
 	"phi-DCN/client/config"
@@ -52,31 +56,74 @@ func initLogging() {
 	ErrorLogger = log.New(errorFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
+// loadLogs โหลดและแสดง logs ใน Text widget
+func loadLogs(logText *widget.TextGrid) {
+	// โหลด logs จากไฟล์
+	currentTime := time.Now().Format("2006-01-02")
+	logFile := fmt.Sprintf("logs/app_info_%s.log", currentTime)
+
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		logText.SetText(logText.Text() + fmt.Sprintf("❌ ไม่สามารถโหลดไฟล์ log: %v\n", err))
+		return
+	}
+
+	// แสดง logs ใน Text widget
+	logText.SetText(logText.Text() + string(content) + "\n============\n")
+}
+
+// darkTheme กำหนด theme สีเข้ม
+type darkTheme struct{}
+
+func (t *darkTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	switch name {
+	case theme.ColorNameBackground:
+		return color.RGBA{40, 40, 40, 255} // สีพื้นหลังเทาเข้ม
+	case theme.ColorNameForeground:
+		return color.RGBA{200, 200, 200, 255} // สีตัวอักษรขาว
+	default:
+		return theme.DefaultTheme().Color(name, variant)
+	}
+}
+
+func (t *darkTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return theme.DefaultTheme().Font(style)
+}
+
+func (t *darkTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return theme.DefaultTheme().Icon(name)
+}
+
+func (t *darkTheme) Size(name fyne.ThemeSizeName) float32 {
+	return theme.DefaultTheme().Size(name)
+}
+
 func main() {
 	// เริ่มต้นระบบบันทึกข้อมูล
 	initLogging()
 
-	// สร้าง GUI window
-	var mw *walk.MainWindow
-	var textEdit *walk.TextEdit
+	// สร้าง GUI application
+	a := app.New()
+	w := a.NewWindow("Phi DCN Client")
+	w.Resize(fyne.NewSize(800, 600))
 
-	MainWindow{
-		AssignTo: &mw,
-		Title:    "Phi DCN Client",
-		MinSize:  Size{400, 300},
-		Layout:   VBox{},
-		Children: []Widget{
-			TextEdit{
-				AssignTo: &textEdit,
-				ReadOnly: true,
-				VScroll:  true,
-			},
-		},
-	}.Create()
+	// สร้าง Text widget สำหรับแสดง logs
+	logText := widget.NewTextGrid()
+	logText.SetText("=== Logs ===\n")
+
+	// สร้าง Scroll container
+	scroll := container.NewScroll(logText)
+	scroll.Resize(fyne.NewSize(800, 600))
+
+	// ตั้งค่า theme ให้เป็น dark mode
+	a.Settings().SetTheme(&darkTheme{})
+
+	// ตั้งค่า content ของ window
+	w.SetContent(scroll)
 
 	// ตั้งค่าเริ่มต้น - โหลดจากไฟล์ config.ini
 	if err := config.InitConfig(); err != nil {
-		textEdit.AppendText(fmt.Sprintf("❌ ไม่สามารถโหลดการตั้งค่าได้: %v\n", err))
+		logText.SetText(logText.Text() + fmt.Sprintf("❌ ไม่สามารถโหลดการตั้งค่าได้: %v\n", err))
 		ErrorLogger.Printf("ไม่สามารถโหลดการตั้งค่าได้: %v", err)
 		os.Exit(1)
 	}
@@ -84,7 +131,7 @@ func main() {
 
 	// ตรวจสอบความถูกต้องของการตั้งค่า
 	if err := config.Config.ValidateConfig(); err != nil {
-		textEdit.AppendText(fmt.Sprintf("❌ การตั้งค่าไม่ถูกต้อง: %v\n", err))
+		logText.SetText(logText.Text() + fmt.Sprintf("❌ การตั้งค่าไม่ถูกต้อง: %v\n", err))
 		ErrorLogger.Printf("การตั้งค่าไม่ถูกต้อง: %v", err)
 		os.Exit(1)
 	}
@@ -104,7 +151,7 @@ func main() {
 	setupSignalHandler()
 
 	// เริ่ม REST API ก่อน
-	textEdit.AppendText("Starting REST API server...\n")
+	logText.SetText(logText.Text() + "Starting REST API server...\n")
 	InfoLogger.Println("กำลังเริ่ม REST API server...")
 	restServerChan := make(chan error, 1)
 	go func() {
@@ -112,13 +159,13 @@ func main() {
 	}()
 
 	// รอให้ REST API server เริ่มทำงาน
-	textEdit.AppendText("Waiting for REST API server to start...\n")
+	logText.SetText(logText.Text() + "Waiting for REST API server to start...\n")
 	InfoLogger.Println("กำลังรอให้ REST API server เริ่มทำงาน...")
 	time.Sleep(2 * time.Second)
 
 	// ตรวจสอบการเชื่อมต่อ API
-	textEdit.AppendText("Checking API connection...\n")
-	textEdit.AppendText(fmt.Sprintf("Trying to connect to API at: %s\n", config.Config.GetAPIURL()))
+	logText.SetText(logText.Text() + "Checking API connection...\n")
+	logText.SetText(logText.Text() + fmt.Sprintf("Trying to connect to API at: %s\n", config.Config.GetAPIURL()))
 	InfoLogger.Printf("กำลังตรวจสอบการเชื่อมต่อ API ที่: %s", config.Config.GetAPIURL())
 
 	apiCheckChan := make(chan error, 1)
@@ -138,51 +185,54 @@ func main() {
 	select {
 	case err := <-apiCheckChan:
 		if err != nil {
-			textEdit.AppendText(fmt.Sprintf("\n❌ API connection failed: %v\n", err))
+			logText.SetText(logText.Text() + fmt.Sprintf("\n❌ API connection failed: %v\n", err))
 			ErrorLogger.Printf("การเชื่อมต่อ API ล้มเหลว: %v", err)
 
-			textEdit.AppendText("\nPossible causes:\n")
-			textEdit.AppendText("1. API server is not running\n")
-			textEdit.AppendText("2. Incorrect API configuration\n")
-			textEdit.AppendText("3. Network connectivity issues\n")
-			textEdit.AppendText("\nPlease check your configuration:\n")
-			textEdit.AppendText(fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
-			textEdit.AppendText(fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
-			textEdit.AppendText(fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
-			textEdit.AppendText(fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
-			textEdit.AppendText("\nPlease update your configuration using:\n")
-			textEdit.AppendText(fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
+			logText.SetText(logText.Text() + "\nPossible causes:\n")
+			logText.SetText(logText.Text() + "1. API server is not running\n")
+			logText.SetText(logText.Text() + "2. Incorrect API configuration\n")
+			logText.SetText(logText.Text() + "3. Network connectivity issues\n")
+			logText.SetText(logText.Text() + "\nPlease check your configuration:\n")
+			logText.SetText(logText.Text() + fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
+			logText.SetText(logText.Text() + fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
+			logText.SetText(logText.Text() + fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
+			logText.SetText(logText.Text() + fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
+			logText.SetText(logText.Text() + "\nPlease update your configuration using:\n")
+			logText.SetText(logText.Text() + fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
 			os.Exit(1)
 		}
-		textEdit.AppendText("✅ API connection successful\n")
+		logText.SetText(logText.Text() + "✅ API connection successful\n")
 		InfoLogger.Println("การเชื่อมต่อ API สำเร็จ")
 	case <-time.After(API_TIMEOUT):
-		textEdit.AppendText(fmt.Sprintf("\n❌ API connection timeout after %v\n", API_TIMEOUT))
+		logText.SetText(logText.Text() + fmt.Sprintf("\n❌ API connection timeout after %v\n", API_TIMEOUT))
 		ErrorLogger.Printf("การเชื่อมต่อ API หมดเวลาหลังจาก %v", API_TIMEOUT)
 
-		textEdit.AppendText("\nPossible causes:\n")
-		textEdit.AppendText("1. API server is not responding\n")
-		textEdit.AppendText("2. Network latency is too high\n")
-		textEdit.AppendText("3. Firewall blocking the connection\n")
-		textEdit.AppendText("\nPlease check your configuration:\n")
-		textEdit.AppendText(fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
-		textEdit.AppendText(fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
-		textEdit.AppendText(fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
-		textEdit.AppendText(fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
-		textEdit.AppendText("\nPlease update your configuration using:\n")
-		textEdit.AppendText(fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
+		logText.SetText(logText.Text() + "\nPossible causes:\n")
+		logText.SetText(logText.Text() + "1. API server is not responding\n")
+		logText.SetText(logText.Text() + "2. Network latency is too high\n")
+		logText.SetText(logText.Text() + "3. Firewall blocking the connection\n")
+		logText.SetText(logText.Text() + "\nPlease check your configuration:\n")
+		logText.SetText(logText.Text() + fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
+		logText.SetText(logText.Text() + fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
+		logText.SetText(logText.Text() + fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
+		logText.SetText(logText.Text() + fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
+		logText.SetText(logText.Text() + "\nPlease update your configuration using:\n")
+		logText.SetText(logText.Text() + fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
 		os.Exit(1)
 	}
 
-	// แสดงข้อความว่าแอปพลิเคชันพร้อมใช้งาน
-	textEdit.AppendText("\n✅ Application is ready!\n")
-	InfoLogger.Println("แอปพลิเคชันพร้อมใช้งาน")
-	textEdit.AppendText(fmt.Sprintf("- REST API running on port: %s\n", apiPort))
-	textEdit.AppendText(fmt.Sprintf("- TCP Server running on port: %s\n", config.Config.TCPServerPort))
-	textEdit.AppendText(fmt.Sprintf("- Connected to API: %s\n\n", config.Config.GetAPIURL()))
+	// โหลดและแสดง logs
+	loadLogs(logText)
 
-	// รัน GUI
-	mw.Run()
+	// แสดงข้อความว่าแอปพลิเคชันพร้อมใช้งาน
+	logText.SetText(logText.Text() + "\n✅ Application is ready!\n")
+	InfoLogger.Println("แอปพลิเคชันพร้อมใช้งาน")
+	logText.SetText(logText.Text() + fmt.Sprintf("- REST API running on port: %s\n", apiPort))
+	logText.SetText(logText.Text() + fmt.Sprintf("- TCP Server running on port: %s\n", config.Config.TCPServerPort))
+	logText.SetText(logText.Text() + fmt.Sprintf("- Connected to API: %s\n\n", config.Config.GetAPIURL()))
+
+	// แสดง window
+	w.ShowAndRun()
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน
