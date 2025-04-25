@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,12 +26,13 @@ var (
 
 // ค่าคงที่สำหรับการตั้งค่า
 const (
-	MaxConnections     = 5   // จำนวนการเชื่อมต่อสูงสุด
-	ReadTimeout        = 30  // timeout สำหรับการอ่านข้อมูลจาก client (วินาที)
-	WriteTimeout       = 5   // timeout สำหรับการเขียนข้อมูลไปยัง client (วินาที)
-	RetryAttempts      = 3   // จำนวนครั้งในการ retry เมื่อเกิดข้อผิดพลาด
-	RetryDelay         = 500 // ระยะเวลาในการ retry (มิลลิวินาที)
-	APIPollingInterval = 750 // ระยะเวลาในการดึงข้อมูลจาก API (มิลลิวินาที)
+	MaxConnections     = 5           // จำนวนการเชื่อมต่อสูงสุด
+	ReadTimeout        = 8 * 60 * 60 // timeout สำหรับการอ่านข้อมูลจาก client (วินาที) - 8 ชั่วโมง
+	WriteTimeout       = 5           // timeout สำหรับการเขียนข้อมูลไปยัง client (วินาที)
+	RetryAttempts      = 3           // จำนวนครั้งในการ retry เมื่อเกิดข้อผิดพลาด
+	RetryDelay         = 500         // ระยะเวลาในการ retry (มิลลิวินาที)
+	APIPollingInterval = 750         // ระยะเวลาในการดึงข้อมูลจาก API (มิลลิวินาที)
+	KeepAliveInterval  = 30 * 60     // ระยะเวลาในการส่ง keep-alive (วินาที) - 30 นาที
 )
 
 // โครงสร้างสำหรับเก็บข้อมูล client
@@ -258,6 +258,11 @@ func (p *ProxyServer) Broadcast(data []byte) {
 
 // จัดการการเชื่อมต่อจาก client
 func HandleClientConnection(proxy *ProxyServer, conn net.Conn) {
+	// ตั้งค่า keep-alive
+	tcpConn := conn.(*net.TCPConn)
+	tcpConn.SetKeepAlive(true)
+	tcpConn.SetKeepAlivePeriod(time.Duration(KeepAliveInterval) * time.Second)
+
 	// ตั้งค่า timeout
 	conn.SetReadDeadline(time.Now().Add(time.Duration(ReadTimeout) * time.Second))
 
@@ -313,111 +318,163 @@ func retry(attempts int, sleep time.Duration, f func() error) error {
 
 // ฟังก์ชันดึงข้อมูลจาก API และส่งไปยัง clients
 func (p *ProxyServer) ProcessAndBroadcast() {
+	// เก็บสถานะล่าสุดของไมค์ทั้งหมด
 	var lastSpeakers []api.Speaker
+	// เก็บสถานะปัจจุบันของไมค์แต่ละตัว (true = on, false = off)
 	speakerStates := make(map[int]bool)
-	ticker := time.NewTicker(time.Duration(APIPollingInterval) * time.Millisecond)
-	defer ticker.Stop()
+	// เก็บลำดับการส่งข้อมูล
+	var currentSpeakers []api.Speaker
+	// เก็บเวลาที่ไมค์ปิดทั้งหมด
+	var allMicsOffTime time.Time
+	// เก็บสถานะว่ากำลังรอรีเซ็ตหรือไม่
+	var waitingForReset bool
+	// เก็บจำนวนครั้งที่ API ส่งข้อมูลว่างกลับมา
+	var emptyResponseCount int
 
 	for {
-		select {
-		case <-p.stopChan:
-			return
-		case <-ticker.C:
-			// ใช้ retry mechanism เมื่อเกิดข้อผิดพลาด
-			var speakers []api.Speaker
-			err := retry(RetryAttempts, RetryDelay, func() error {
-				var err error
-				speakers, err = api.GetSpeakers()
-				return err
-			})
+		// ดึงข้อมูลไมค์ที่เปิดอยู่จาก API
+		speakers, err := api.GetSpeakers()
+		if err != nil {
+			// ... จัดการ error
+			continue
+		}
 
-			if err != nil {
-				p.metrics.RecordError("API", fmt.Errorf("Cannot fetch speakers data: %v", err))
-				fmt.Println("⚠️ Cannot fetch speakers data:", err)
-				config.Config.UpdateAPIStatus("Cannot connect to API: " + err.Error())
-
-				// ส่ง XML ว่างเมื่อไม่มีข้อมูลจาก API
-				emptyXML := xml.ToUTF16LEString(fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?><DiscussionActivity xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Version="1" TimeStamp="%s" Topic="Discussion" Type="ActiveListUpdated"><Discussion Id="80"><ActiveList><Participants></Participants></ActiveList></Discussion></DiscussionActivity>`,
-					time.Now().Format("2006-01-02T15:04:05.0000000-07:00")))
-
-				header := make([]byte, 8)
-				binary.LittleEndian.PutUint32(header[0:4], 3)
-				binary.LittleEndian.PutUint32(header[4:8], uint32(len(emptyXML)))
-				p.Broadcast(append(header, emptyXML...))
-				continue
+		// ตรวจสอบว่าข้อมูลจาก API เป็นข้อมูลว่างหรือไม่
+		if len(speakers) == 0 {
+			emptyResponseCount++
+			// ถ้า API ส่งข้อมูลว่างกลับมาเกิน 3 ครั้งติดต่อกัน ให้รีเซ็ตสถานะ
+			if emptyResponseCount >= 3 {
+				// รีเซ็ตสถานะของไมค์ทั้งหมด
+				speakerStates = make(map[int]bool)
+				currentSpeakers = []api.Speaker{}
+				waitingForReset = false
+				emptyResponseCount = 0
+				fmt.Println("🔄 Reset all microphone states due to empty API response")
+				InfoLogger.Println("Reset all microphone states due to empty API response")
 			}
+			time.Sleep(time.Second)
+			continue
+		}
 
-			// อัปเดตสถานะ API เป็นเชื่อมต่อสำเร็จ
-			config.Config.UpdateAPIStatus("Connected successfully")
+		// รีเซ็ตตัวนับข้อมูลว่าง
+		emptyResponseCount = 0
 
-			// ตรวจสอบการเปลี่ยนแปลงของแต่ละที่นั่ง
-			currentSpeakerIDs := make(map[int]bool)
-			for _, speaker := range speakers {
-				currentSpeakerIDs[speaker.ID] = true
+		// สร้าง map สำหรับไมค์ที่เปิดอยู่ตอนนี้
+		currentActiveMics := make(map[int]bool)
+		for _, speaker := range speakers {
+			currentActiveMics[speaker.ID] = true
+		}
 
-				// ตรวจสอบการเปลี่ยนแปลงสถานะไมค์
-				lastState, exists := speakerStates[speaker.ID]
-				microphoneActive := speaker.MicOn == 1
-				if !exists || lastState != microphoneActive {
-					// แสดงสถานะในคอนโซล
-					micStatus := "Off 🔴"
-					if microphoneActive {
-						micStatus = "On 🟢"
-					}
-					fmt.Printf("🎙️ Mic %s: %s\n", speaker.SeatName, micStatus)
-					InfoLogger.Printf("Mic %s: %s", speaker.SeatName, micStatus)
+		// ตรวจสอบว่ามีไมค์ที่เปิดอยู่หรือไม่
+		hasActiveMic := false
+		for _, speaker := range speakers {
+			if speaker.MicOn == 1 {
+				hasActiveMic = true
+				break
+			}
+		}
 
-					// ส่ง SeatActivity เมื่อสถานะเปลี่ยน
-					seatXML := xml.GenerateSeatXML(speaker, microphoneActive)
-					header := make([]byte, 8)
-					binary.LittleEndian.PutUint32(header[0:4], 5)
-					binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
-					p.Broadcast(append(header, seatXML...))
-					speakerStates[speaker.ID] = microphoneActive
+		// ถ้าไม่มีไมค์ที่เปิดอยู่
+		if !hasActiveMic {
+			// ถ้ายังไม่ได้เริ่มนับเวลา
+			if !waitingForReset {
+				allMicsOffTime = time.Now()
+				waitingForReset = true
+			} else {
+				// ถ้าเวลาผ่านไป 2 วินาที
+				if time.Since(allMicsOffTime) >= 2*time.Second {
+					// รีเซ็ตสถานะของไมค์ทั้งหมด
+					speakerStates = make(map[int]bool)
+					currentSpeakers = []api.Speaker{}
+					waitingForReset = false
+					fmt.Println("🔄 Reset all microphone states after 2 seconds of inactivity")
+					InfoLogger.Println("Reset all microphone states after 2 seconds of inactivity")
 				}
 			}
+		} else {
+			// ถ้ามีไมค์ที่เปิดอยู่ ให้รีเซ็ตตัวนับเวลา
+			waitingForReset = false
+		}
 
-			// ตรวจสอบที่นั่งที่หายไป
-			for id, state := range speakerStates {
-				if !currentSpeakerIDs[id] && state {
-					// สร้าง speaker ข้อมูลเดิมแต่ปิดไมค์
-					for _, oldSpeaker := range lastSpeakers {
-						if oldSpeaker.ID == id {
-							// แสดงสถานะในคอนโซล
-							fmt.Printf("🎙️ Mic %s: Canceled ⚫\n", oldSpeaker.SeatName)
-							InfoLogger.Printf("Mic %s: Canceled", oldSpeaker.SeatName)
+		// ตรวจสอบไมค์ที่เปิดอยู่ (อยู่ใน speakers)
+		for _, speaker := range speakers {
+			// ถ้าไมค์นี้ยังไม่เคยเปิดมาก่อน หรือเคยปิดไปแล้ว
+			if !speakerStates[speaker.ID] {
+				// แสดงสถานะไมค์เปิด
+				fmt.Printf("🎙️ Mic ON: %s (ID: %d)\n", speaker.SeatName, speaker.ID)
+				InfoLogger.Printf("Mic ON: %s (ID: %d)", speaker.SeatName, speaker.ID)
 
-							seatXML := xml.GenerateSeatXML(oldSpeaker, false)
-							header := make([]byte, 8)
-							binary.LittleEndian.PutUint32(header[0:4], 5)
-							binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
-							p.Broadcast(append(header, seatXML...))
-							speakerStates[id] = false
-
-							// อัปเดตสถานะไมค์
-							config.Config.UpdateActiveMic(oldSpeaker.SeatName, false)
-							break
-						}
-					}
-				}
-			}
-
-			// ส่ง DiscussionActivity เมื่อรายการที่นั่งเปลี่ยน
-			if !reflect.DeepEqual(speakers, lastSpeakers) {
-				discussionXML := xml.GenerateDiscussionXML(speakers)
+				// ส่ง SeatActivity เมื่อไมค์เปิด
+				seatXML := xml.GenerateSeatXML(speaker, true)
 				header := make([]byte, 8)
+				binary.LittleEndian.PutUint32(header[0:4], 5)
+				binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
+				p.Broadcast(append(header, seatXML...))
+
+				// อัปเดตสถานะเป็นเปิด
+				speakerStates[speaker.ID] = true
+
+				// เพิ่มไมค์นี้เข้าไปในรายการปัจจุบัน
+				currentSpeakers = append(currentSpeakers, speaker)
+
+				// ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ทั้งหมดจนถึงลำดับนี้
+				discussionXML := xml.GenerateDiscussionXML(currentSpeakers)
+				header = make([]byte, 8)
 				binary.LittleEndian.PutUint32(header[0:4], 3)
 				binary.LittleEndian.PutUint32(header[4:8], uint32(len(discussionXML)))
 				p.Broadcast(append(header, discussionXML...))
-				lastSpeakers = speakers
 			}
 		}
+
+		// ตรวจสอบไมค์ที่ปิด (ไม่อยู่ใน speakers แต่เคยเปิด)
+		for id, state := range speakerStates {
+			// ตรวจสอบว่าสถานะปัจจุบันของไมค์นี้เคยเปิดอยู่ และตอนนี้ไม่อยู่ในรายการไมค์ที่เปิดอยู่
+			if state && !currentActiveMics[id] {
+				// หาข้อมูลไมค์ที่ปิดจาก lastSpeakers
+				for _, oldSpeaker := range lastSpeakers {
+					if oldSpeaker.ID == id {
+						// แสดงสถานะไมค์ปิด
+						fmt.Printf("🎙️ Mic OFF: %s (ID: %d)\n", oldSpeaker.SeatName, oldSpeaker.ID)
+						InfoLogger.Printf("Mic OFF: %s (ID: %d)", oldSpeaker.SeatName, oldSpeaker.ID)
+
+						// ส่ง SeatActivity เมื่อไมค์ปิด
+						seatXML := xml.GenerateSeatXML(oldSpeaker, false)
+						header := make([]byte, 8)
+						binary.LittleEndian.PutUint32(header[0:4], 5)
+						binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
+						p.Broadcast(append(header, seatXML...))
+
+						// อัปเดตสถานะเป็นปิด
+						speakerStates[id] = false
+
+						// ลบไมค์นี้ออกจากรายการปัจจุบัน
+						for i, s := range currentSpeakers {
+							if s.ID == id {
+								currentSpeakers = append(currentSpeakers[:i], currentSpeakers[i+1:]...)
+								break
+							}
+						}
+
+						// ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ทั้งหมด
+						discussionXML := xml.GenerateDiscussionXML(currentSpeakers)
+						header = make([]byte, 8)
+						binary.LittleEndian.PutUint32(header[0:4], 3)
+						binary.LittleEndian.PutUint32(header[4:8], uint32(len(discussionXML)))
+						p.Broadcast(append(header, discussionXML...))
+						break
+					}
+				}
+			}
+		}
+
+		lastSpeakers = speakers
+		time.Sleep(time.Second)
 	}
 }
 
 // cleanInactiveClients ตรวจสอบและลบ clients ที่ไม่ได้ใช้งานเป็นเวลานาน
 func (p *ProxyServer) cleanInactiveClients() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(3000 * time.Second)
 	defer ticker.Stop()
 
 	for {

@@ -85,3 +85,41 @@
 - `GET /api/test`: ทดสอบการเชื่อมต่อกับ API
 - `GET /api/start`: เริ่ม TCP Server
 - `GET /api/stop`: หยุด TCP Server 
+
+
+
+เพิ่ม currentSpeakers เพื่อเก็บลำดับไมค์ที่เปิดอยู่
+เมื่อมีไมค์เปิดใหม่:
+ส่ง SeatActivity สำหรับไมค์นั้น
+เพิ่มไมค์เข้าไปใน currentSpeakers
+ส่ง DiscussionActivity แสดงไมค์ทั้งหมดจนถึงลำดับนั้น
+รอสักครู่ก่อนส่งไมค์ตัวต่อไป
+เมื่อมีไมค์ปิด:
+ส่ง SeatActivity สำหรับไมค์นั้น
+ลบไมค์ออกจาก currentSpeakers
+ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ทั้งหมด
+ตัวอย่างการทำงาน:
+Event 1: API ส่ง mic on 4 id (MIC 1,2,3,4)
+ครั้งที่ 1:
+ส่ง SeatActivity ON สำหรับ MIC 1
+ส่ง DiscussionActivity แสดง MIC 1
+ครั้งที่ 2:
+ส่ง SeatActivity ON สำหรับ MIC 2
+ส่ง DiscussionActivity แสดง MIC 1,2
+ครั้งที่ 3:
+ส่ง SeatActivity ON สำหรับ MIC 3
+ส่ง DiscussionActivity แสดง MIC 1,2,3
+ครั้งที่ 4:
+ส่ง SeatActivity ON สำหรับ MIC 4
+ส่ง DiscussionActivity แสดง MIC 1,2,3,4
+
+Event 2: API ส่ง mic on 2 id (MIC 1,3)
+ส่ง SeatActivity OFF สำหรับ MIC 2
+ส่ง DiscussionActivity แสดง MIC 1,3
+ส่ง SeatActivity OFF สำหรับ MIC 4
+ส่ง DiscussionActivity แสดง MIC 1,3
+การทำงานนี้จะทำให้:
+ส่งข้อมูลทีละไมค์ตามลำดับ
+แสดงรายการไมค์ที่เปิดอยู่ได้ถูกต้องตามลำดับ
+จัดการการเปิด/ปิดไมค์ได้อย่างถูกต้อง
+คุณคิดว่าการปรับปรุงนี้ตรงกับความต้องการหรือไม่ครับ?
