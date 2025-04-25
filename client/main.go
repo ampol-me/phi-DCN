@@ -5,9 +5,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/lxn/walk"
+	. "github.com/lxn/walk/declarative"
 
 	"phi-DCN/client/api"
 	"phi-DCN/client/config"
@@ -54,17 +56,27 @@ func main() {
 	// เริ่มต้นระบบบันทึกข้อมูล
 	initLogging()
 
-	fmt.Println("Initializing application...")
-	InfoLogger.Println("เริ่มต้นแอปพลิเคชัน...")
+	// สร้าง GUI window
+	var mw *walk.MainWindow
+	var textEdit *walk.TextEdit
 
-	// แสดงข้อมูลของแอปพลิเคชัน
-	fmt.Printf("DCN Application version %s\n", APP_VERSION)
-	fmt.Printf("Running on %s %s\n", runtime.GOOS, runtime.GOARCH)
-	InfoLogger.Printf("DCN Application version %s, Running on %s %s", APP_VERSION, runtime.GOOS, runtime.GOARCH)
+	MainWindow{
+		AssignTo: &mw,
+		Title:    "Phi DCN Client",
+		MinSize:  Size{400, 300},
+		Layout:   VBox{},
+		Children: []Widget{
+			TextEdit{
+				AssignTo: &textEdit,
+				ReadOnly: true,
+				VScroll:  true,
+			},
+		},
+	}.Create()
 
 	// ตั้งค่าเริ่มต้น - โหลดจากไฟล์ config.ini
 	if err := config.InitConfig(); err != nil {
-		fmt.Printf("❌ ไม่สามารถโหลดการตั้งค่าได้: %v\n", err)
+		textEdit.AppendText(fmt.Sprintf("❌ ไม่สามารถโหลดการตั้งค่าได้: %v\n", err))
 		ErrorLogger.Printf("ไม่สามารถโหลดการตั้งค่าได้: %v", err)
 		os.Exit(1)
 	}
@@ -72,7 +84,7 @@ func main() {
 
 	// ตรวจสอบความถูกต้องของการตั้งค่า
 	if err := config.Config.ValidateConfig(); err != nil {
-		fmt.Printf("❌ การตั้งค่าไม่ถูกต้อง: %v\n", err)
+		textEdit.AppendText(fmt.Sprintf("❌ การตั้งค่าไม่ถูกต้อง: %v\n", err))
 		ErrorLogger.Printf("การตั้งค่าไม่ถูกต้อง: %v", err)
 		os.Exit(1)
 	}
@@ -92,7 +104,7 @@ func main() {
 	setupSignalHandler()
 
 	// เริ่ม REST API ก่อน
-	fmt.Println("Starting REST API server...")
+	textEdit.AppendText("Starting REST API server...\n")
 	InfoLogger.Println("กำลังเริ่ม REST API server...")
 	restServerChan := make(chan error, 1)
 	go func() {
@@ -100,13 +112,13 @@ func main() {
 	}()
 
 	// รอให้ REST API server เริ่มทำงาน
-	fmt.Println("Waiting for REST API server to start...")
+	textEdit.AppendText("Waiting for REST API server to start...\n")
 	InfoLogger.Println("กำลังรอให้ REST API server เริ่มทำงาน...")
 	time.Sleep(2 * time.Second)
 
 	// ตรวจสอบการเชื่อมต่อ API
-	fmt.Println("Checking API connection...")
-	fmt.Printf("Trying to connect to API at: %s\n", config.Config.GetAPIURL())
+	textEdit.AppendText("Checking API connection...\n")
+	textEdit.AppendText(fmt.Sprintf("Trying to connect to API at: %s\n", config.Config.GetAPIURL()))
 	InfoLogger.Printf("กำลังตรวจสอบการเชื่อมต่อ API ที่: %s", config.Config.GetAPIURL())
 
 	apiCheckChan := make(chan error, 1)
@@ -126,69 +138,51 @@ func main() {
 	select {
 	case err := <-apiCheckChan:
 		if err != nil {
-			fmt.Printf("\n❌ API connection failed: %v\n", err)
+			textEdit.AppendText(fmt.Sprintf("\n❌ API connection failed: %v\n", err))
 			ErrorLogger.Printf("การเชื่อมต่อ API ล้มเหลว: %v", err)
 
-			fmt.Println("\nPossible causes:")
-			fmt.Println("1. API server is not running")
-			fmt.Println("2. Incorrect API configuration")
-			fmt.Println("3. Network connectivity issues")
-			fmt.Println("\nPlease check your configuration:")
-			fmt.Printf("- API Host: %s\n", config.Config.APIHost)
-			fmt.Printf("- API Port: %s\n", config.Config.APIPort)
-			fmt.Printf("- API Path: %s\n", config.Config.APIPath)
-			fmt.Printf("- API Key: %s\n", config.Config.APIKey)
-			fmt.Println("\nPlease update your configuration using:")
-			fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
-
-			// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
-			fmt.Println("\nPress Enter to exit...")
-			fmt.Scanln()
+			textEdit.AppendText("\nPossible causes:\n")
+			textEdit.AppendText("1. API server is not running\n")
+			textEdit.AppendText("2. Incorrect API configuration\n")
+			textEdit.AppendText("3. Network connectivity issues\n")
+			textEdit.AppendText("\nPlease check your configuration:\n")
+			textEdit.AppendText(fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
+			textEdit.AppendText(fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
+			textEdit.AppendText(fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
+			textEdit.AppendText(fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
+			textEdit.AppendText("\nPlease update your configuration using:\n")
+			textEdit.AppendText(fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
 			os.Exit(1)
 		}
-		fmt.Println("✅ API connection successful")
+		textEdit.AppendText("✅ API connection successful\n")
 		InfoLogger.Println("การเชื่อมต่อ API สำเร็จ")
 	case <-time.After(API_TIMEOUT):
-		fmt.Printf("\n❌ API connection timeout after %v\n", API_TIMEOUT)
+		textEdit.AppendText(fmt.Sprintf("\n❌ API connection timeout after %v\n", API_TIMEOUT))
 		ErrorLogger.Printf("การเชื่อมต่อ API หมดเวลาหลังจาก %v", API_TIMEOUT)
 
-		fmt.Println("\nPossible causes:")
-		fmt.Println("1. API server is not responding")
-		fmt.Println("2. Network latency is too high")
-		fmt.Println("3. Firewall blocking the connection")
-		fmt.Println("\nPlease check your configuration:")
-		fmt.Printf("- API Host: %s\n", config.Config.APIHost)
-		fmt.Printf("- API Port: %s\n", config.Config.APIPort)
-		fmt.Printf("- API Path: %s\n", config.Config.APIPath)
-		fmt.Printf("- API Key: %s\n", config.Config.APIKey)
-		fmt.Println("\nPlease update your configuration using:")
-		fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
-
-		// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
-		fmt.Println("\nPress Enter to exit...")
-		fmt.Scanln()
+		textEdit.AppendText("\nPossible causes:\n")
+		textEdit.AppendText("1. API server is not responding\n")
+		textEdit.AppendText("2. Network latency is too high\n")
+		textEdit.AppendText("3. Firewall blocking the connection\n")
+		textEdit.AppendText("\nPlease check your configuration:\n")
+		textEdit.AppendText(fmt.Sprintf("- API Host: %s\n", config.Config.APIHost))
+		textEdit.AppendText(fmt.Sprintf("- API Port: %s\n", config.Config.APIPort))
+		textEdit.AppendText(fmt.Sprintf("- API Path: %s\n", config.Config.APIPath))
+		textEdit.AppendText(fmt.Sprintf("- API Key: %s\n", config.Config.APIKey))
+		textEdit.AppendText("\nPlease update your configuration using:\n")
+		textEdit.AppendText(fmt.Sprintf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort))
 		os.Exit(1)
 	}
 
 	// แสดงข้อความว่าแอปพลิเคชันพร้อมใช้งาน
-	fmt.Println("\n✅ Application is ready!")
+	textEdit.AppendText("\n✅ Application is ready!\n")
 	InfoLogger.Println("แอปพลิเคชันพร้อมใช้งาน")
-	fmt.Printf("- REST API running on port: %s\n", apiPort)
-	fmt.Printf("- TCP Server running on port: %s\n", config.Config.TCPServerPort)
-	fmt.Printf("- Connected to API: %s\n\n", config.Config.GetAPIURL())
+	textEdit.AppendText(fmt.Sprintf("- REST API running on port: %s\n", apiPort))
+	textEdit.AppendText(fmt.Sprintf("- TCP Server running on port: %s\n", config.Config.TCPServerPort))
+	textEdit.AppendText(fmt.Sprintf("- Connected to API: %s\n\n", config.Config.GetAPIURL()))
 
-	// สำหรับ Windows GUI
-	if runtime.GOOS == "windows" {
-		// รอให้ผู้ใช้กดปุ่มเพื่อปิดโปรแกรม
-		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
-	} else {
-		// สำหรับ Mac/Linux รอให้ REST server หยุดทำงาน
-		err := <-restServerChan
-		if err != nil {
-			ErrorLogger.Printf("REST API server หยุดทำงานเนื่องจาก: %v", err)
-		}
-	}
+	// รัน GUI
+	mw.Run()
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน

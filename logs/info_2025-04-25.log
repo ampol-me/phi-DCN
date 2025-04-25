@@ -43,3 +43,11 @@ INFO: 2025/04/25 13:31:16 proxy.go:388: Mic 0014: Canceled
 INFO: 2025/04/25 13:31:17 proxy.go:368: Mic 0014: On 🟢
 INFO: 2025/04/25 13:31:17 proxy.go:368: Mic 0015: On 🟢
 INFO: 2025/04/25 13:31:59 proxy.go:205: Client 1 disconnected: 192.168.88.197:50616
+INFO: 2025/04/25 13:46:19 proxy.go:457: TCP Server initializing...
+INFO: 2025/04/25 13:46:19 proxy.go:493: Listening on port 20001
+INFO: 2025/04/25 13:46:20 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:46:20 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:51:45 proxy.go:457: TCP Server initializing...
+INFO: 2025/04/25 13:51:45 proxy.go:493: Listening on port 20001
+INFO: 2025/04/25 13:51:46 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:51:46 proxy.go:368: Mic 0015: On 🟢
