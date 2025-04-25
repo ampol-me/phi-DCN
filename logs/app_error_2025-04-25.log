@@ -1,0 +1,1 @@
+ERROR: 2025/04/25 13:22:17 main.go:130: การเชื่อมต่อ API ล้มเหลว: Failed to connect to API: Get "http://localhost:3000/api/speakers": dial tcp [::1]:3000: connectex: No connection could be made because the target machine actively refused it.

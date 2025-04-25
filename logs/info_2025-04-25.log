@@ -1,0 +1,45 @@
+INFO: 2025/04/25 13:22:13 proxy.go:457: TCP Server initializing...
+INFO: 2025/04/25 13:27:59 proxy.go:457: TCP Server initializing...
+INFO: 2025/04/25 13:27:59 proxy.go:493: Listening on port 20001
+INFO: 2025/04/25 13:28:00 proxy.go:368: Mic 0018: On 🟢
+INFO: 2025/04/25 13:28:00 proxy.go:368: Mic 0019: On 🟢
+INFO: 2025/04/25 13:28:09 proxy.go:388: Mic 0018: Canceled
+INFO: 2025/04/25 13:28:16 proxy.go:388: Mic 0019: Canceled
+INFO: 2025/04/25 13:28:17 proxy.go:368: Mic 0016: On 🟢
+INFO: 2025/04/25 13:28:17 proxy.go:368: Mic 0019: On 🟢
+INFO: 2025/04/25 13:28:31 proxy.go:368: Mic 0005: On 🟢
+INFO: 2025/04/25 13:28:35 proxy.go:388: Mic 0005: Canceled
+INFO: 2025/04/25 13:28:40 proxy.go:388: Mic 0019: Canceled
+INFO: 2025/04/25 13:28:40 proxy.go:388: Mic 0016: Canceled
+INFO: 2025/04/25 13:28:40 proxy.go:368: Mic 0016: On 🟢
+INFO: 2025/04/25 13:28:46 proxy.go:368: Mic 0010: On 🟢
+INFO: 2025/04/25 13:28:50 proxy.go:388: Mic 0016: Canceled
+INFO: 2025/04/25 13:28:50 proxy.go:388: Mic 0010: Canceled
+INFO: 2025/04/25 13:28:51 proxy.go:368: Mic 0016: On 🟢
+INFO: 2025/04/25 13:28:53 proxy.go:388: Mic 0016: Canceled
+INFO: 2025/04/25 13:29:34 proxy.go:182: Client 1 connected: 192.168.88.197:50616
+INFO: 2025/04/25 13:29:40 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:29:49 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 13:29:50 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:29:50 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:30:13 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 13:30:13 proxy.go:388: Mic 0014: Canceled
+INFO: 2025/04/25 13:30:13 proxy.go:368: Mic 0013: On 🟢
+INFO: 2025/04/25 13:30:13 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:30:13 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:30:56 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 13:30:56 proxy.go:388: Mic 0014: Canceled
+INFO: 2025/04/25 13:30:56 proxy.go:388: Mic 0013: Canceled
+INFO: 2025/04/25 13:30:57 proxy.go:368: Mic 0013: On 🟢
+INFO: 2025/04/25 13:30:57 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:31:08 proxy.go:388: Mic 0014: Canceled
+INFO: 2025/04/25 13:31:08 proxy.go:388: Mic 0013: Canceled
+INFO: 2025/04/25 13:31:09 proxy.go:368: Mic 0013: On 🟢
+INFO: 2025/04/25 13:31:09 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:31:09 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:31:16 proxy.go:388: Mic 0013: Canceled
+INFO: 2025/04/25 13:31:16 proxy.go:388: Mic 0015: Canceled
+INFO: 2025/04/25 13:31:16 proxy.go:388: Mic 0014: Canceled
+INFO: 2025/04/25 13:31:17 proxy.go:368: Mic 0014: On 🟢
+INFO: 2025/04/25 13:31:17 proxy.go:368: Mic 0015: On 🟢
+INFO: 2025/04/25 13:31:59 proxy.go:205: Client 1 disconnected: 192.168.88.197:50616

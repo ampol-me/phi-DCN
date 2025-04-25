@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // AppConfig เก็บการตั้งค่าของแอปพลิเคชัน
@@ -20,8 +21,15 @@ type AppConfig struct {
 	APIStatus       string
 	ActiveMics      map[string]bool   // SeatName -> status
 	Clients         map[string]string // IP -> info
+	ConfigVersion   string            // รุ่นของไฟล์การตั้งค่า
+	LastUpdated     time.Time         // เวลาที่อัปเดตล่าสุด
 	mu              sync.RWMutex
 }
+
+// Constants
+const (
+	CONFIG_VERSION = "1.0.0" // รุ่นปัจจุบันของไฟล์การตั้งค่า
+)
 
 // Config คือ global configuration instance
 var Config = &AppConfig{
@@ -34,6 +42,8 @@ var Config = &AppConfig{
 	APIStatus:       "Not connected",
 	ActiveMics:      make(map[string]bool),
 	Clients:         make(map[string]string),
+	ConfigVersion:   CONFIG_VERSION,
+	LastUpdated:     time.Now(),
 }
 
 // InitConfig เริ่มต้นการตั้งค่าโดยโหลดจากไฟล์ config.ini
@@ -83,10 +93,18 @@ func LoadConfig() error {
 			Config.TCPServerPort = value
 		case "APIKey":
 			Config.APIKey = value
+		case "ConfigVersion":
+			Config.ConfigVersion = value
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("เกิดข้อผิดพลาดในการอ่านไฟล์ config.ini: %v", err)
+	}
+
+	// อัปเดตเวลาล่าสุด
+	Config.LastUpdated = time.Now()
+	return nil
 }
 
 // SaveConfig บันทึกการตั้งค่าลงไฟล์ config.ini
@@ -107,24 +125,78 @@ func SaveConfig() error {
 	writer := bufio.NewWriter(file)
 	defer writer.Flush()
 
+	// เขียนข้อมูลเกี่ยวกับไฟล์
+	fmt.Fprintf(writer, "# DCN Configuration File\n")
+	fmt.Fprintf(writer, "# Generated on: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(writer, "# Version: %s\n\n", CONFIG_VERSION)
+
 	// เขียนการตั้งค่าลงไฟล์
 	fmt.Fprintf(writer, "APIHost=%s\n", Config.APIHost)
 	fmt.Fprintf(writer, "APIPort=%s\n", Config.APIPort)
 	fmt.Fprintf(writer, "APIPath=%s\n", Config.APIPath)
 	fmt.Fprintf(writer, "TCPServerPort=%s\n", Config.TCPServerPort)
 	fmt.Fprintf(writer, "APIKey=%s\n", Config.APIKey)
+	fmt.Fprintf(writer, "ConfigVersion=%s\n", CONFIG_VERSION)
+
+	// อัปเดตเวลาล่าสุด
+	Config.LastUpdated = time.Now()
+	Config.ConfigVersion = CONFIG_VERSION
 
 	return nil
 }
 
+// BackupConfig สร้างไฟล์สำรองก่อนการปรับปรุงการตั้งค่า
+func BackupConfig() error {
+	configPath := filepath.Join("config", "config.ini")
+	backupPath := filepath.Join("config", fmt.Sprintf("config_backup_%s.ini", time.Now().Format("20060102150405")))
+
+	// ทำสำเนาไฟล์ config.ini
+	input, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("ไม่สามารถอ่านไฟล์ config.ini: %v", err)
+	}
+
+	// เขียนไฟล์สำรอง
+	err = os.WriteFile(backupPath, input, 0644)
+	if err != nil {
+		return fmt.Errorf("ไม่สามารถเขียนไฟล์สำรอง: %v", err)
+	}
+
+	return nil
+}
+
+// RestoreConfig คืนค่าการตั้งค่าจากไฟล์สำรอง
+func RestoreConfig(backupFile string) error {
+	backupPath := filepath.Join("config", backupFile)
+	configPath := filepath.Join("config", "config.ini")
+
+	// อ่านไฟล์สำรอง
+	input, err := os.ReadFile(backupPath)
+	if err != nil {
+		return fmt.Errorf("ไม่สามารถอ่านไฟล์สำรอง: %v", err)
+	}
+
+	// เขียนทับไฟล์ config.ini
+	err = os.WriteFile(configPath, input, 0644)
+	if err != nil {
+		return fmt.Errorf("ไม่สามารถเขียนไฟล์ config.ini: %v", err)
+	}
+
+	// โหลดการตั้งค่าใหม่
+	return LoadConfig()
+}
+
 // GetAPIURL คืนค่า URL เต็มของ API
 func (c *AppConfig) GetAPIURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return "http://" + c.APIHost + ":" + c.APIPort + c.APIPath
-	//return "http://" + c.APIHost + ":" + c.APIPort + c.APIPath + "?isPolling=true"
 }
 
 // GetAPIKey คืนค่า API Key
 func (c *AppConfig) GetAPIKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.APIKey
 }
 
@@ -170,6 +242,37 @@ func (c *AppConfig) GetActiveClients() map[string]string {
 	return clients
 }
 
+// UpdateConfig อัปเดตการตั้งค่าหลายค่าพร้อมกัน
+func (c *AppConfig) UpdateConfig(updates map[string]string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// สำรองการตั้งค่าก่อนการเปลี่ยนแปลง
+	if err := BackupConfig(); err != nil {
+		return fmt.Errorf("ไม่สามารถสำรองการตั้งค่า: %v", err)
+	}
+
+	// อัปเดตค่าต่างๆ
+	for key, value := range updates {
+		switch key {
+		case "APIHost":
+			c.APIHost = value
+		case "APIPort":
+			c.APIPort = value
+		case "APIPath":
+			c.APIPath = value
+		case "TCPServerPort":
+			c.TCPServerPort = value
+		case "APIKey":
+			c.APIKey = value
+		}
+	}
+
+	// บันทึกการตั้งค่าใหม่
+	c.LastUpdated = time.Now()
+	return SaveConfig()
+}
+
 // UpdateActiveMic อัปเดตสถานะไมค์ที่กำลังใช้งาน
 func (c *AppConfig) UpdateActiveMic(seatName string, active bool) {
 	c.mu.Lock()
@@ -204,4 +307,82 @@ func (c *AppConfig) GetActiveMics() []string {
 	}
 
 	return activeMics
+}
+
+// ValidateConfig ตรวจสอบความถูกต้องของการตั้งค่า
+func (c *AppConfig) ValidateConfig() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// ตรวจสอบค่าต่างๆ
+	if c.APIHost == "" {
+		return fmt.Errorf("APIHost ไม่สามารถเป็นค่าว่างได้")
+	}
+
+	if c.APIPort == "" {
+		return fmt.Errorf("APIPort ไม่สามารถเป็นค่าว่างได้")
+	}
+
+	if c.APIPath == "" {
+		return fmt.Errorf("APIPath ไม่สามารถเป็นค่าว่างได้")
+	}
+
+	if c.TCPServerPort == "" {
+		return fmt.Errorf("TCPServerPort ไม่สามารถเป็นค่าว่างได้")
+	}
+
+	return nil
+}
+
+// RollbackConfig คืนค่าการตั้งค่าเป็นค่าล่าสุดในกรณีเกิดข้อผิดพลาด
+func (c *AppConfig) RollbackConfig() error {
+	// หาไฟล์สำรองล่าสุด
+	backupDir := filepath.Join("config")
+	files, err := os.ReadDir(backupDir)
+	if err != nil {
+		return fmt.Errorf("ไม่สามารถอ่านโฟลเดอร์ config: %v", err)
+	}
+
+	var latestBackup string
+	var latestTime time.Time
+
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), "config_backup_") && strings.HasSuffix(file.Name(), ".ini") {
+			// แปลงชื่อไฟล์เป็นเวลา
+			timeStr := strings.TrimPrefix(file.Name(), "config_backup_")
+			timeStr = strings.TrimSuffix(timeStr, ".ini")
+			fileTime, err := time.Parse("20060102150405", timeStr)
+			if err != nil {
+				continue
+			}
+
+			if latestBackup == "" || fileTime.After(latestTime) {
+				latestBackup = file.Name()
+				latestTime = fileTime
+			}
+		}
+	}
+
+	if latestBackup == "" {
+		return fmt.Errorf("ไม่พบไฟล์สำรอง")
+	}
+
+	// คืนค่าการตั้งค่า
+	return RestoreConfig(latestBackup)
+}
+
+// GetConfigInfo คืนค่าข้อมูลการตั้งค่า
+func (c *AppConfig) GetConfigInfo() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return map[string]string{
+		"APIHost":       c.APIHost,
+		"APIPort":       c.APIPort,
+		"APIPath":       c.APIPath,
+		"TCPServerPort": c.TCPServerPort,
+		"APIKey":        c.APIKey,
+		"ConfigVersion": c.ConfigVersion,
+		"LastUpdated":   c.LastUpdated.Format("2006-01-02 15:04:05"),
+	}
 }
