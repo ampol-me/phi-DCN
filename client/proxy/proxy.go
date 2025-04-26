@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,6 +67,8 @@ type ProxyServer struct {
 	connCount     int // จำนวนการเชื่อมต่อปัจจุบัน
 	connCountLock sync.Mutex
 	metrics       *Metrics // เก็บสถิติการทำงาน
+	listener      net.Listener
+	pid           int // เพิ่ม PID
 }
 
 // Metrics เก็บสถิติการทำงาน
@@ -524,6 +528,7 @@ func StartProxy() {
 	// สร้าง proxy server
 	proxy := NewProxyServer()
 	proxy.isRunning = true
+	proxy.pid = os.Getpid() // เก็บ PID ของ process
 
 	// เริ่ม goroutine สำหรับตรวจสอบ clients ที่ไม่ได้ใช้งาน
 	go proxy.cleanInactiveClients()
@@ -532,27 +537,22 @@ func StartProxy() {
 	config.Config.UpdateTCPServerStatus("Initializing...")
 	InfoLogger.Println("TCP Server initializing...")
 
-	// เริ่ม proxy server ด้วยการลอง port หลายครั้ง
-	var proxyListener net.Listener
+	// เริ่ม proxy server ที่ port 20000
 	var err error
-	maxRetries := 5
-	basePort := config.Config.TCPServerPort
-	currentPort := basePort
+	port := "20000" // ใช้ port 20000 เท่านั้น
 
-	for i := 0; i < maxRetries; i++ {
-		proxyListener, err = net.Listen("tcp", ":"+currentPort)
-		if err == nil {
-			break
-		}
+	// สร้าง TCP listener ด้วย SO_REUSEADDR
+	addr, err := net.ResolveTCPAddr("tcp", ":"+port)
+	if err != nil {
+		errMsg := fmt.Sprintf("Cannot resolve TCP address: %v", err)
+		fmt.Printf("❌ %s\n", errMsg)
+		ErrorLogger.Println(errMsg)
+		config.Config.UpdateTCPServerStatus(errMsg)
+		return
+	}
 
-		// ถ้า port ถูกใช้งานอยู่แล้ว ให้ลอง port ถัดไป
-		if strings.Contains(err.Error(), "address already in use") {
-			portNum, _ := strconv.Atoi(currentPort)
-			currentPort = strconv.Itoa(portNum + 1)
-			continue
-		}
-
-		// ถ้าเกิด error อื่นๆ ให้แสดง error และหยุดการทำงาน
+	proxy.listener, err = net.ListenTCP("tcp", addr)
+	if err != nil {
 		errMsg := fmt.Sprintf("Cannot start TCP server: %v", err)
 		fmt.Printf("❌ %s\n", errMsg)
 		ErrorLogger.Println(errMsg)
@@ -561,27 +561,19 @@ func StartProxy() {
 	}
 
 	// ถ้าเริ่ม server สำเร็จ
-	if proxyListener != nil {
+	if proxy.listener != nil {
 		// อัปเดตสถานะ และแสดงข้อความ
-		statusMsg := fmt.Sprintf("Listening on port %s", currentPort)
-		config.Config.UpdateTCPServerStatus(statusMsg)
+		statusMsg := fmt.Sprintf("Listening on port %s (PID: %d)", port, proxy.pid)
+		config.Config.UpdateTCPServerStatus("Running")
 		fmt.Printf("🚀 %s\n", statusMsg)
 		InfoLogger.Println(statusMsg)
-
-		// ถ้า port ที่ใช้ไม่ใช่ port ที่ตั้งค่าไว้ ให้บันทึกลงไฟล์ config
-		if currentPort != basePort {
-			config.Config.TCPServerPort = currentPort
-			if err := config.SaveConfig(); err != nil {
-				ErrorLogger.Printf("Cannot save config: %v", err)
-			}
-		}
 
 		// เริ่ม goroutine สำหรับดึงข้อมูลจาก API
 		go proxy.ProcessAndBroadcast()
 
 		// รับการเชื่อมต่อจาก clients
 		for {
-			conn, err := proxyListener.Accept()
+			conn, err := proxy.listener.Accept()
 			if err != nil {
 				if strings.Contains(err.Error(), "use of closed network connection") {
 					break
@@ -599,16 +591,47 @@ func StartProxy() {
 // StopProxy หยุดการทำงานของ Proxy
 func StopProxy(proxy *ProxyServer) {
 	if proxy.isRunning {
+		// ส่งสัญญาณให้หยุดการทำงาน
 		close(proxy.stopChan)
 		proxy.isRunning = false
 
 		// ปิดการเชื่อมต่อกับทุก clients
 		proxy.clientLock.Lock()
 		for id, client := range proxy.clients {
-			client.conn.Close()
+			// ปิดการเชื่อมต่อแบบ graceful
+			if tcpConn, ok := client.conn.(*net.TCPConn); ok {
+				tcpConn.SetLinger(0) // ปิดการเชื่อมต่อทันที
+				tcpConn.CloseWrite() // ปิดการเขียน
+				tcpConn.CloseRead()  // ปิดการอ่าน
+				tcpConn.Close()      // ปิดการเชื่อมต่อ
+			}
 			delete(proxy.clients, id)
 		}
 		proxy.clientLock.Unlock()
+
+		// ปิด listener เพื่อปล่อย port
+		if proxy.listener != nil {
+			// ปิด listener แบบ graceful
+			if tcpListener, ok := proxy.listener.(*net.TCPListener); ok {
+				tcpListener.SetDeadline(time.Now()) // บังคับให้ปิดการเชื่อมต่อ
+				tcpListener.Close()                 // ปิด listener
+			}
+			proxy.listener = nil
+		}
+
+		// รอให้การเชื่อมต่อทั้งหมดถูกปิด
+		time.Sleep(2 * time.Second)
+
+		// ถ้ายังมี process ที่ใช้ port 20000 อยู่ และเป็น process เดิม ให้ kill process นั้น
+		if proxy.pid > 0 {
+			var cmd *exec.Cmd
+			if runtime.GOOS == "windows" {
+				cmd = exec.Command("taskkill", "/F", "/PID", strconv.Itoa(proxy.pid))
+			} else {
+				cmd = exec.Command("kill", "-9", strconv.Itoa(proxy.pid))
+			}
+			cmd.Run()
+		}
 
 		InfoLogger.Println("TCP Server stopped")
 		config.Config.UpdateTCPServerStatus("Stopped")
@@ -676,6 +699,11 @@ func Setup() {
 		log.Fatalf("ไม่สามารถโหลดการตั้งค่าได้: %v", err)
 	}
 
-	// เริ่มทำงาน Proxy
-	go StartProxy()
+	// ตั้งค่า StartServerFunc
+	config.StartServerFunc = StartProxy
+
+	// ตั้งค่าเริ่มต้นสำหรับ proxy
+	proxy := NewProxyServer()
+	proxy.isRunning = false
+	config.Config.UpdateTCPServerStatus("Stopped")
 }

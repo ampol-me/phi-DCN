@@ -173,7 +173,7 @@ func main() {
 	// สร้าง GUI application
 	a := app.New()
 	w := a.NewWindow("Phi DCN Client")
-	w.Resize(fyne.NewSize(800, 600))
+	w.Resize(fyne.NewSize(890, 600))
 
 	// สร้าง Text widget สำหรับแสดง logs
 	logText := widget.NewTextGrid()
@@ -181,7 +181,7 @@ func main() {
 
 	// สร้าง Scroll container
 	scroll := container.NewScroll(logText)
-	scroll.Resize(fyne.NewSize(800, 600))
+	scroll.Resize(fyne.NewSize(890, 600))
 
 	// ตั้งค่า theme ให้เป็น dark mode
 	a.Settings().SetTheme(&darkTheme{})
@@ -204,7 +204,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ตั้งค่า proxy
+	// ตั้งค่า proxy โดยไม่เริ่ม TCP Server ทันที
 	proxy.Setup()
 	InfoLogger.Println("Proxy setup completed")
 
@@ -296,7 +296,7 @@ func main() {
 	logText.SetText(logText.Text() + "\n✅ Application is ready!\n")
 	InfoLogger.Println("Application is ready")
 	logText.SetText(logText.Text() + fmt.Sprintf("- REST API running on port: %s\n", apiPort))
-	logText.SetText(logText.Text() + fmt.Sprintf("- TCP Server running on port: %s\n", config.Config.TCPServerPort))
+	logText.SetText(logText.Text() + fmt.Sprintf("- TCP Server port: %s (not started yet)\n", config.Config.TCPServerPort))
 	logText.SetText(logText.Text() + fmt.Sprintf("- Connected to API: %s\n\n", config.Config.GetAPIURL()))
 
 	// แสดง window

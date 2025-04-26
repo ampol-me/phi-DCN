@@ -118,6 +118,7 @@ func handleStatus(c *fiber.Ctx) error {
 	status := fiber.Map{
 		"apiStatus":    config.Config.APIStatus,
 		"serverStatus": config.Config.TCPServerStatus,
+		"serverPort":   config.Config.TCPServerPort,
 	}
 
 	return c.JSON(status)
@@ -133,10 +134,8 @@ func handleStartServer(c *fiber.Ctx) error {
 		})
 	}
 
-	// เริ่ม TCP Server ในพื้นหลัง
-	go func() {
-		config.StartTCPServer()
-	}()
+	// เริ่ม TCP Server
+	go config.StartProxy()
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
@@ -146,7 +145,19 @@ func handleStartServer(c *fiber.Ctx) error {
 
 // handleStopServer หยุด TCP Server
 func handleStopServer(c *fiber.Ctx) error {
-	config.StopTCPServer()
+	// ตรวจสอบว่า TCP Server กำลังทำงานอยู่หรือไม่
+	if !config.IsServerRunning() {
+		return c.JSON(fiber.Map{
+			"status":  "error",
+			"message": "TCP Server is not running",
+		})
+	}
+
+	// หยุด TCP Server
+	config.StopProxy()
+
+	// รอให้การหยุดเสร็จสมบูรณ์
+	time.Sleep(1 * time.Second)
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
