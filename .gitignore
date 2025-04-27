@@ -26,3 +26,5 @@ logs/
 # Temporary files
 *.tmp
 *.temp 
+build/phi-dcn-bridge
+.DS_Store
