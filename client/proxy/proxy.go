@@ -16,6 +16,7 @@ import (
 
 	"phi-DCN/client/api"
 	"phi-DCN/client/config"
+	"phi-DCN/client/license"
 	"phi-DCN/client/xml"
 )
 
@@ -517,6 +518,22 @@ func (p *ProxyServer) cleanInactiveClients() {
 func StartProxy() {
 	// เริ่มต้น logging system
 	initLogging()
+
+	// โหลดและตรวจสอบ license
+	if err := license.LoadLicense(); err != nil {
+		ErrorLogger.Printf("Failed to load license: %v", err)
+		fmt.Printf("❌ Failed to load license: %v\n", err)
+		return
+	}
+
+	if err := license.ValidateLicense(); err != nil {
+		ErrorLogger.Printf("License validation failed: %v", err)
+		fmt.Printf("❌ License validation failed: %v\n", err)
+		return
+	}
+
+	// เริ่มการตรวจสอบ license เป็นระยะ
+	license.StartLicenseCheck()
 
 	// สร้าง proxy server
 	proxy := NewProxyServer()

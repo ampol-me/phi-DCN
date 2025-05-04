@@ -21,8 +21,9 @@ type AppConfig struct {
 	APIStatus       string
 	ActiveMics      map[string]bool   // SeatName -> status
 	Clients         map[string]string // IP -> info
-	ConfigVersion   string            // รุ่นของไฟล์การตั้งค่า
-	LastUpdated     time.Time         // เวลาที่อัปเดตล่าสุด
+	ConfigVersion   string
+	LicenseKey      string
+	LastUpdated     time.Time
 	mu              sync.RWMutex
 }
 
@@ -43,6 +44,7 @@ var Config = &AppConfig{
 	ActiveMics:      make(map[string]bool),
 	Clients:         make(map[string]string),
 	ConfigVersion:   CONFIG_VERSION,
+	LicenseKey:      "",
 	LastUpdated:     time.Now(),
 }
 
@@ -95,6 +97,8 @@ func LoadConfig() error {
 			Config.APIKey = value
 		case "ConfigVersion":
 			Config.ConfigVersion = value
+		case "LicenseKey":
+			Config.LicenseKey = value
 		}
 	}
 
@@ -137,7 +141,7 @@ func SaveConfig() error {
 	fmt.Fprintf(writer, "TCPServerPort=%s\n", Config.TCPServerPort)
 	fmt.Fprintf(writer, "APIKey=%s\n", Config.APIKey)
 	fmt.Fprintf(writer, "ConfigVersion=%s\n", CONFIG_VERSION)
-
+	fmt.Fprintf(writer, "LicenseKey=%s\n", Config.LicenseKey)
 	// อัปเดตเวลาล่าสุด
 	Config.LastUpdated = time.Now()
 	Config.ConfigVersion = CONFIG_VERSION
@@ -191,6 +195,13 @@ func (c *AppConfig) GetAPIURL() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return "http://" + c.APIHost + ":" + c.APIPort + c.APIPath
+}
+
+// GetLicenseKey คืนค่า License Key
+func (c *AppConfig) GetLicenseKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.LicenseKey
 }
 
 // GetAPIKey คืนค่า API Key
@@ -265,6 +276,8 @@ func (c *AppConfig) UpdateConfig(updates map[string]string) error {
 			c.TCPServerPort = value
 		case "APIKey":
 			c.APIKey = value
+		case "LicenseKey":
+			c.LicenseKey = value
 		}
 	}
 
@@ -384,5 +397,25 @@ func (c *AppConfig) GetConfigInfo() map[string]string {
 		"APIKey":        c.APIKey,
 		"ConfigVersion": c.ConfigVersion,
 		"LastUpdated":   c.LastUpdated.Format("2006-01-02 15:04:05"),
+		"LicenseKey":    c.LicenseKey,
 	}
+}
+
+// GetConfigDir รับ path ของโฟลเดอร์ config
+func GetConfigDir() string {
+	// ใช้ $HOME/.phi-dcn เป็นโฟลเดอร์หลัก
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// ถ้าไม่สามารถหา home directory ได้ ให้ใช้ current directory
+		return "."
+	}
+
+	configDir := filepath.Join(homeDir, ".phi-dcn")
+
+	// สร้างโฟลเดอร์ถ้ายังไม่มี
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return "."
+	}
+
+	return configDir
 }
