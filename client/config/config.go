@@ -57,12 +57,37 @@ func InitConfig() error {
 			return fmt.Errorf("ไม่สามารถบันทึกไฟล์ config.ini: %v", err)
 		}
 	}
+
+	// โหลดไฟล์ license
+	if err := LoadLicense(); err != nil {
+		return fmt.Errorf("ไม่สามารถโหลดไฟล์ license: %v", err)
+	}
+
 	return nil
 }
 
 // LoadConfig โหลดการตั้งค่าจากไฟล์ config.ini
 func LoadConfig() error {
-	configPath := filepath.Join("config", "config.ini")
+	// ค้นหาไฟล์ config.ini ในตำแหน่งต่างๆ
+	possiblePaths := []string{
+		"config.ini",                                // ในโฟลเดอร์ปัจจุบัน
+		"config/config.ini",                         // ในโฟลเดอร์ config
+		filepath.Join("..", "config.ini"),           // ในโฟลเดอร์แม่
+		filepath.Join("..", "config", "config.ini"), // ในโฟลเดอร์ config ของโฟลเดอร์แม่
+	}
+
+	var configPath string
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			configPath = path
+			break
+		}
+	}
+
+	if configPath == "" {
+		return fmt.Errorf("ไม่พบไฟล์ config.ini ในตำแหน่งใดๆ")
+	}
+
 	file, err := os.Open(configPath)
 	if err != nil {
 		return fmt.Errorf("ไม่สามารถเปิดไฟล์ config.ini: %v", err)
@@ -403,14 +428,8 @@ func (c *AppConfig) GetConfigInfo() map[string]string {
 
 // GetConfigDir รับ path ของโฟลเดอร์ config
 func GetConfigDir() string {
-	// ใช้ $HOME/.phi-dcn เป็นโฟลเดอร์หลัก
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		// ถ้าไม่สามารถหา home directory ได้ ให้ใช้ current directory
-		return "."
-	}
-
-	configDir := filepath.Join(homeDir, ".phi-dcn")
+	// ใช้โฟลเดอร์โปรเจค
+	configDir := "./config"
 
 	// สร้างโฟลเดอร์ถ้ายังไม่มี
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -418,4 +437,15 @@ func GetConfigDir() string {
 	}
 
 	return configDir
+}
+
+// LoadLicense คืนค่า LicenseKey จาก config.ini
+func LoadLicense() error {
+	licenseKey := Config.GetLicenseKey()
+	if licenseKey == "" {
+		return fmt.Errorf("ไม่พบ LicenseKey ใน config.ini")
+	}
+	// ตั้งค่า LicenseKey ใน config
+	Config.LicenseKey = licenseKey
+	return nil
 }

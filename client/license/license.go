@@ -90,7 +90,13 @@ func getNTPTime() (time.Time, error) {
 }
 
 // สร้าง backup license
-func createLicenseBackup() error {
+func // `createLicenseBackup` is a function that creates a backup of the current license information.
+// It first checks if there is a current license available. If there is, it creates a backup
+// directory if it doesn't already exist. Then, it creates a backup file in the backup directory
+// with the current timestamp as part of the file name. The license information is then marshaled
+// into JSON format and written to the backup file. Finally, the backup file path is stored in the
+// current license information.
+createLicenseBackup() error {
 	if currentLicense == nil {
 		return errors.New("no license to backup")
 	}
@@ -167,7 +173,7 @@ func syncWithServer() error {
 		return fmt.Errorf("failed to marshal license: %v", err)
 	}
 
-	resp, err := client.Post("http://192.168.88.152/api/license/validate", "application/json", strings.NewReader(string(data)))
+	resp, err := client.Post("http://lic.phim.in.th/api/license/validate", "application/json", strings.NewReader(string(data)))
 	if err != nil {
 		return fmt.Errorf("failed to sync with server: %v", err)
 	}
@@ -292,7 +298,7 @@ func loadLicenseFromServer(licenseKey string) error {
 	// ส่ง request ไปยัง server
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(
-		"http://192.168.88.152/api/license/validate",
+		"http://lic.phim.in.th/api/license/validate",
 		"application/json",
 		strings.NewReader(string(data)),
 	)
@@ -331,7 +337,7 @@ func loadLicenseFromServer(licenseKey string) error {
 func loadLicenseFromBackup(licenseKey string) error {
 	// หาไฟล์ backup ล่าสุด
 	backupDir := filepath.Join(config.GetConfigDir(), "backup")
-	files, err := ioutil.ReadDir(backupDir)
+	files, err := os.ReadDir(backupDir)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory: %v", err)
 	}
@@ -399,7 +405,7 @@ func loadLicenseFromBackup(licenseKey string) error {
 
 // logLicenseInfo แสดงข้อมูล license
 func logLicenseInfo() {
-	daysLeft := int(currentLicense.ExpiryDate.Sub(time.Now()).Hours() / 24)
+	daysLeft := int(time.Until(currentLicense.ExpiryDate).Hours() / 24)
 	licenseInfo := fmt.Sprintf(
 		"License Info:\n"+
 			"  ID: %s\n"+
@@ -418,5 +424,4 @@ func logLicenseInfo() {
 	)
 
 	fmt.Printf("✅ License validated successfully\n%s\n", licenseInfo)
-	ErrorLogger.Printf("License validated successfully\n%s", licenseInfo)
 }

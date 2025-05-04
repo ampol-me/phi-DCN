@@ -1,0 +1,13 @@
+{
+  "id": "b5704e68-e5f7-4f39-9f83-d47b454599a6",
+  "key": "T-0c1f915c-7a19cad3-435e6674-192605ef",
+  "type": "trial",
+  "expiryDate": "2025-06-03T08:02:55Z",
+  "maxClients": 2,
+  "features": "\"Standard\"",
+  "status": "active",
+  "createdAt": "2025-05-04T08:02:55Z",
+  "updatedAt": "2025-05-04T08:02:55Z",
+  "lastSync": "2025-05-04T17:37:10.013913+07:00",
+  "backupPath": "config/backup/license_20250504_173710.json"
+}

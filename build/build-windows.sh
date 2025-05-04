@@ -41,11 +41,26 @@ else
 fi
 
 # คัดลอกไฟล์ config.ini
-if [ -f "$ROOT_DIR/config.ini" ]; then
-    cp "$ROOT_DIR/config.ini" "$OUTPUT_DIR/"
-    echo "✅ Copied config.ini to $OUTPUT_DIR/"
+if [ -f "$ROOT_DIR/config/config.ini" ]; then
+    cp "$ROOT_DIR/config/config.ini" "$OUTPUT_DIR/config/config.ini"
+    echo "✅ Copied config.ini to $OUTPUT_DIR/config/config.ini"
 else
-    echo -e "${YELLOW}⚠️ Warning: config.ini not found at $ROOT_DIR/config.ini${NC}"
+    echo -e "${YELLOW}⚠️ Warning: config.ini not found at $ROOT_DIR/config/config.ini${NC}"
+fi
+
+# คัดลอกไฟล์ license จาก backup
+BACKUP_DIR="$ROOT_DIR/config/backup"
+if [ -d "$BACKUP_DIR" ]; then
+    # หาไฟล์ license ล่าสุด
+    LATEST_LICENSE=$(ls -t "$BACKUP_DIR"/license_*.json 2>/dev/null | head -n1)
+    if [ -n "$LATEST_LICENSE" ]; then
+        cp "$LATEST_LICENSE" "$OUTPUT_DIR/config/backup/license.json"
+        echo "✅ Copied latest license from backup to $OUTPUT_DIR/config/backup/license.json"
+    else
+        echo -e "${YELLOW}⚠️ Warning: No license files found in $BACKUP_DIR${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️ Warning: backup directory not found at $BACKUP_DIR${NC}"
 fi
 
 # คัดลอกไฟล์ README.md
@@ -75,7 +90,7 @@ fi
 # Create zip file
 echo "Creating zip file..."
 cd "$OUTPUT_DIR"
-zip -u "$SCRIPT_DIR/phi-dcn-windows-$VERSION.zip" "$APP_NAME.exe"
+zip -r "$SCRIPT_DIR/phi-dcn-windows-$VERSION.zip" .
 
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 echo -e "${BLUE}📂 Binary files are available in the build/dist/windows directory${NC}"
