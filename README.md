@@ -75,6 +75,94 @@
 ./phi-dcn-client 3003
 ```
 
+## การตั้งค่า
+
+### config.ini
+```ini
+APIHost=localhost
+APIPort=3000
+APIPath=/api/speakers
+TCPServerPort=20000
+APIKey=your-api-key
+```
+
+## การทำงานของระบบ
+
+### XML Server (Phi DCN Bridge)
+XML Server ทำหน้าที่เป็นตัวกลางระหว่างระบบ DCN และระบบอื่นๆ โดยแปลงข้อมูลจาก API เป็น XML และส่งไปยังไคลเอนต์ผ่าน TCP connection
+
+#### คุณสมบัติหลัก
+1. **การเชื่อมต่อ TCP**
+   - รองรับการเชื่อมต่อพร้อมกันสูงสุด 5 ไคลเอนต์
+   - ใช้ keep-alive เพื่อรักษาการเชื่อมต่อ
+   - มีระบบจัดการ timeout และการเชื่อมต่อที่ขาดหาย
+
+2. **การแปลงข้อมูล**
+   - แปลงข้อมูลจาก API เป็น XML
+   - ส่งข้อมูลแบบ real-time เมื่อมีการเปลี่ยนแปลง
+   - รองรับการส่งข้อมูลแบบ SeatActivity และ DiscussionActivity
+
+3. **การจัดการสถานะ**
+   - ติดตามสถานะไมค์ที่เปิด/ปิด
+   - อัปเดตสถานะใน config
+   - ส่ง XML เฉพาะเมื่อมีการเปลี่ยนแปลง
+
+4. **ระบบ Logging**
+   - บันทึกข้อมูลการทำงาน
+   - บันทึกข้อผิดพลาด
+   - แยกไฟล์ log ตามวัน
+
+5. **การจัดการ Error**
+   - มีระบบ retry สำหรับการเชื่อมต่อ API
+   - มีการจัดการ error ที่เกิดขึ้นระหว่างการทำงาน
+   - มีการบันทึกข้อผิดพลาดลง log
+
+### การจัดการสถานะไมค์
+
+ระบบจะจัดการสถานะไมค์ตามลำดับดังนี้:
+
+1. **เมื่อมีไมค์เปิดใหม่:**
+   - ส่ง SeatActivity ON สำหรับไมค์นั้น
+   - เพิ่มไมค์เข้าไปใน currentSpeakers
+   - ส่ง DiscussionActivity แสดงไมค์ทั้งหมดจนถึงลำดับนั้น
+   - รอ 500ms ก่อนส่งไมค์ตัวต่อไป
+
+2. **เมื่อมีไมค์ปิด:**
+   - ส่ง SeatActivity OFF สำหรับไมค์นั้น
+   - ลบไมค์ออกจาก currentSpeakers
+   - ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ทั้งหมด
+
+3. **เมื่อ API ส่งค่ากลับมาเป็น []:**
+   - ส่ง SeatActivity OFF สำหรับไมค์ทั้งหมด
+   - ล้าง currentSpeakers
+   - ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ (ไม่มี)
+
+### ตัวอย่างการทำงาน
+
+1. **Event 1: API ส่ง mic on 4 id (MIC 1,2,3,4)**
+   - ครั้งที่ 1:
+     - ส่ง SeatActivity ON สำหรับ MIC 1
+     - ส่ง DiscussionActivity แสดง MIC 1
+   - ครั้งที่ 2:
+     - ส่ง SeatActivity ON สำหรับ MIC 2
+     - ส่ง DiscussionActivity แสดง MIC 1,2
+   - ครั้งที่ 3:
+     - ส่ง SeatActivity ON สำหรับ MIC 3
+     - ส่ง DiscussionActivity แสดง MIC 1,2,3
+   - ครั้งที่ 4:
+     - ส่ง SeatActivity ON สำหรับ MIC 4
+     - ส่ง DiscussionActivity แสดง MIC 1,2,3,4
+
+2. **Event 2: API ส่ง mic on 2 id (MIC 1,3)**
+   - ส่ง SeatActivity OFF สำหรับ MIC 2
+   - ส่ง DiscussionActivity แสดง MIC 1,3
+   - ส่ง SeatActivity OFF สำหรับ MIC 4
+   - ส่ง DiscussionActivity แสดง MIC 1,3
+
+3. **Event 3: API ส่งค่ากลับมาเป็น []**
+   - ส่ง SeatActivity OFF สำหรับไมค์ทั้งหมด
+   - ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ (ไม่มี)
+
 ## API Endpoints
 
 - `GET /api/status`: ดูสถานะการเชื่อมต่อ
@@ -84,44 +172,4 @@
 - `POST /api/config`: อัปเดตการตั้งค่า
 - `GET /api/test`: ทดสอบการเชื่อมต่อกับ API
 - `GET /api/start`: เริ่ม TCP Server
-- `GET /api/stop`: หยุด TCP Server 
-
-
-
-เพิ่ม currentSpeakers เพื่อเก็บลำดับไมค์ที่เปิดอยู่
-เมื่อมีไมค์เปิดใหม่:
-ส่ง SeatActivity สำหรับไมค์นั้น
-เพิ่มไมค์เข้าไปใน currentSpeakers
-ส่ง DiscussionActivity แสดงไมค์ทั้งหมดจนถึงลำดับนั้น
-รอสักครู่ก่อนส่งไมค์ตัวต่อไป
-เมื่อมีไมค์ปิด:
-ส่ง SeatActivity สำหรับไมค์นั้น
-ลบไมค์ออกจาก currentSpeakers
-ส่ง DiscussionActivity แสดงไมค์ที่เปิดอยู่ทั้งหมด
-ตัวอย่างการทำงาน:
-Event 1: API ส่ง mic on 4 id (MIC 1,2,3,4)
-ครั้งที่ 1:
-ส่ง SeatActivity ON สำหรับ MIC 1
-ส่ง DiscussionActivity แสดง MIC 1
-ครั้งที่ 2:
-ส่ง SeatActivity ON สำหรับ MIC 2
-ส่ง DiscussionActivity แสดง MIC 1,2
-ครั้งที่ 3:
-ส่ง SeatActivity ON สำหรับ MIC 3
-ส่ง DiscussionActivity แสดง MIC 1,2,3
-ครั้งที่ 4:
-ส่ง SeatActivity ON สำหรับ MIC 4
-ส่ง DiscussionActivity แสดง MIC 1,2,3,4
-
-Event 2: API ส่ง mic on 2 id (MIC 1,3)
-ส่ง SeatActivity OFF สำหรับ MIC 2
-ส่ง DiscussionActivity แสดง MIC 1,3
-ส่ง SeatActivity OFF สำหรับ MIC 4
-ส่ง DiscussionActivity แสดง MIC 1,3
-
-Event 3 : API ส่งค่ากับมาเป็น [] หมายถึงปิดทั้งหมด
-การทำงานนี้จะทำให้:
-ส่งข้อมูลทีละไมค์ตามลำดับ
-แสดงรายการไมค์ที่เปิดอยู่ได้ถูกต้องตามลำดับ
-จัดการการเปิด/ปิดไมค์ได้อย่างถูกต้อง
-ส่งข้อมูลเมื่อมีการเปลี่ยนแปลงสถานะไมค์เท่านั้น
+- `GET /api/stop`: หยุด TCP Server

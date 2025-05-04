@@ -1,233 +1,140 @@
-# คู่มือการใช้งาน proxy.go
+# Phi DCN Bridge (XML Server)
 
 ## ภาพรวม
-ไฟล์ `proxy.go` ทำหน้าที่เป็นตัวกลางในการรับข้อมูลจาก API แล้วส่งต่อไปยังไคลเอนต์ที่เชื่อมต่อผ่าน TCP ไฟล์นี้ประกอบด้วยฟังก์ชันและโครงสร้างข้อมูลสำหรับการจัดการการเชื่อมต่อและการส่งข้อมูล
+Phi DCN Bridge เป็นโปรแกรมที่ทำหน้าที่เป็นตัวกลางระหว่างระบบ DCN และระบบอื่นๆ โดยแปลงข้อมูลจาก API เป็น XML และส่งไปยังไคลเอนต์ผ่าน TCP connection
 
-## โครงสร้างข้อมูล
+## คุณสมบัติหลัก
+1. **การเชื่อมต่อ TCP**
+   - รองรับการเชื่อมต่อพร้อมกันสูงสุด 5 ไคลเอนต์
+   - ใช้ keep-alive เพื่อรักษาการเชื่อมต่อ
+   - มีระบบจัดการ timeout และการเชื่อมต่อที่ขาดหาย
 
-### Client
-```go
-type Client struct {
-    conn        net.Conn
-    id          int
-    lastActive  time.Time
-    sendQueue   chan []byte
-    done        chan struct{}
-}
-```
-- `conn` - การเชื่อมต่อ TCP กับไคลเอนต์
-- `id` - รหัสประจำตัวของไคลเอนต์
-- `lastActive` - เวลาล่าสุดที่ไคลเอนต์มีการทำงาน
-- `sendQueue` - ช่องทางสำหรับส่งข้อมูลไปยังไคลเอนต์
-- `done` - ช่องทางสำหรับสัญญาณการปิดการเชื่อมต่อ
+2. **การแปลงข้อมูล**
+   - แปลงข้อมูลจาก API เป็น XML
+   - ส่งข้อมูลแบบ real-time เมื่อมีการเปลี่ยนแปลง
+   - รองรับการส่งข้อมูลแบบ SeatActivity และ DiscussionActivity
 
-### ProxyServer
-```go
-type ProxyServer struct {
-    clients       map[int]*Client
-    nextID        int
-    clientLock    sync.RWMutex
-    bufferPool    sync.Pool
-    isRunning     bool
-    stopChan      chan struct{}
-    connCount     int
-    connCountLock sync.Mutex
-    metrics       *Metrics
-}
-```
-- `clients` - แมปของไคลเอนต์ทั้งหมดที่เชื่อมต่ออยู่ (ID -> Client)
-- `nextID` - รหัสประจำตัวสำหรับไคลเอนต์ถัดไป
-- `clientLock` - mutex สำหรับการเข้าถึงแมปไคลเอนต์
-- `bufferPool` - pool ของบัฟเฟอร์สำหรับการอ่านข้อมูล
-- `isRunning` - สถานะการทำงานของเซิร์ฟเวอร์
-- `stopChan` - ช่องทางสำหรับสัญญาณการหยุดเซิร์ฟเวอร์
-- `connCount` - จำนวนการเชื่อมต่อปัจจุบัน
-- `connCountLock` - mutex สำหรับการเข้าถึงจำนวนการเชื่อมต่อ
-- `metrics` - ข้อมูลสถิติการทำงาน
+3. **การจัดการสถานะ**
+   - ติดตามสถานะไมค์ที่เปิด/ปิด
+   - อัปเดตสถานะใน config
+   - ส่ง XML เฉพาะเมื่อมีการเปลี่ยนแปลง
 
-### Metrics
-```go
-type Metrics struct {
-    TotalConnections    int64
-    CurrentConnections  int32
-    TotalErrors         int64
-    APIErrors           int64
-    ClientErrors        int64
-    LastError           string
-    LastErrorTime       time.Time
-    mu                  sync.RWMutex
-}
-```
-- `TotalConnections` - จำนวนการเชื่อมต่อทั้งหมดตั้งแต่เริ่มโปรแกรม
-- `CurrentConnections` - จำนวนการเชื่อมต่อปัจจุบัน
-- `TotalErrors` - จำนวนข้อผิดพลาดทั้งหมด
-- `APIErrors` - จำนวนข้อผิดพลาดจาก API
-- `ClientErrors` - จำนวนข้อผิดพลาดจากไคลเอนต์
-- `LastError` - ข้อผิดพลาดล่าสุด
-- `LastErrorTime` - เวลาที่เกิดข้อผิดพลาดล่าสุด
-- `mu` - mutex สำหรับการเข้าถึงข้อมูลสถิติ
+4. **ระบบ Logging**
+   - บันทึกข้อมูลการทำงาน
+   - บันทึกข้อผิดพลาด
+   - แยกไฟล์ log ตามวัน
 
-## ค่าคงที่
+5. **การจัดการ Error**
+   - มีระบบ retry สำหรับการเชื่อมต่อ API
+   - มีการจัดการ error ที่เกิดขึ้นระหว่างการทำงาน
+   - มีการบันทึกข้อผิดพลาดลง log
+
+## การตั้งค่า
+### ค่าคงที่
 ```go
 const (
-    MaxConnections     = 5    // จำนวนการเชื่อมต่อสูงสุด
-    ReadTimeout        = 30   // timeout สำหรับการอ่านข้อมูลจาก client (วินาที)
-    WriteTimeout       = 5    // timeout สำหรับการเขียนข้อมูลไปยัง client (วินาที)
-    RetryAttempts      = 3    // จำนวนครั้งในการ retry เมื่อเกิดข้อผิดพลาด
-    RetryDelay         = 500  // ระยะเวลาในการ retry (มิลลิวินาที)
-    APIPollingInterval = 750  // ระยะเวลาในการดึงข้อมูลจาก API (มิลลิวินาที)
+    MaxConnections     = 5           // จำนวนการเชื่อมต่อสูงสุด
+    ReadTimeout        = 8 * 60 * 60 // timeout สำหรับการอ่านข้อมูลจาก client (วินาที) - 8 ชั่วโมง
+    WriteTimeout       = 5           // timeout สำหรับการเขียนข้อมูลไปยัง client (วินาที)
+    RetryAttempts      = 3           // จำนวนครั้งในการ retry เมื่อเกิดข้อผิดพลาด
+    RetryDelay         = 500         // ระยะเวลาในการ retry (มิลลิวินาที)
+    APIPollingInterval = 750         // ระยะเวลาในการดึงข้อมูลจาก API (มิลลิวินาที)
+    KeepAliveInterval  = 30 * 60     // ระยะเวลาในการส่ง keep-alive (วินาที) - 30 นาที
 )
 ```
 
-## ฟังก์ชันหลัก
-
-### Setup
-```go
-func Setup()
-```
-เตรียมพร้อมสำหรับการทำงานของ Proxy โดยโหลดการตั้งค่าจากไฟล์ config.ini และเริ่มทำงาน Proxy
-
-### StartProxy
-```go
-func StartProxy()
-```
-เริ่มทำงาน Proxy โดยสร้าง ProxyServer และเริ่มรับการเชื่อมต่อจากไคลเอนต์
-
-### StopProxy
-```go
-func StopProxy(proxy *ProxyServer)
-```
-หยุดการทำงานของ Proxy โดยปิดการเชื่อมต่อกับทุกไคลเอนต์
-
-### ProcessAndBroadcast
-```go
-func (p *ProxyServer) ProcessAndBroadcast()
-```
-ดึงข้อมูลจาก API และส่งไปยังไคลเอนต์ทั้งหมดที่เชื่อมต่ออยู่ เป็นฟังก์ชันหลักที่ทำงานตลอดเวลาในการดึงข้อมูลและส่งข้อมูล
-
-### HandleClientConnection
-```go
-func HandleClientConnection(proxy *ProxyServer, conn net.Conn)
-```
-จัดการการเชื่อมต่อจากไคลเอนต์ โดยสร้าง Client และรอรับข้อมูลจากไคลเอนต์
-
-### AddClient
-```go
-func (p *ProxyServer) AddClient(conn net.Conn) (*Client, error)
-```
-เพิ่มไคลเอนต์ใหม่เข้าสู่ระบบ โดยตรวจสอบจำนวนการเชื่อมต่อก่อนและสร้าง Client ใหม่
-
-### RemoveClient
-```go
-func (p *ProxyServer) RemoveClient(id int)
-```
-ลบไคลเอนต์ออกจากระบบเมื่อไคลเอนต์ยกเลิกการเชื่อมต่อหรือเกิดข้อผิดพลาด
-
-### Broadcast
-```go
-func (p *ProxyServer) Broadcast(data []byte)
-```
-ส่งข้อมูลไปยังไคลเอนต์ทั้งหมดที่เชื่อมต่ออยู่
-
-## ฟังก์ชันเสริม
-
-### initLogging
-```go
-func initLogging()
-```
-เริ่มต้นระบบบันทึกข้อมูล โดยสร้างโฟลเดอร์ logs และเปิดไฟล์สำหรับบันทึกข้อมูล
-
-### RecordError
-```go
-func (m *Metrics) RecordError(errorType string, err error)
-```
-บันทึกข้อผิดพลาด โดยเพิ่มจำนวนข้อผิดพลาดและบันทึกข้อผิดพลาดล่าสุด
-
-### retry
-```go
-func retry(attempts int, sleep time.Duration, f func() error) error
-```
-ทำซ้ำเมื่อเกิดข้อผิดพลาด โดยลองทำฟังก์ชันซ้ำตามจำนวนครั้งที่กำหนด
-
-### cleanInactiveClients
-```go
-func (p *ProxyServer) cleanInactiveClients()
-```
-ตรวจสอบและลบไคลเอนต์ที่ไม่ได้ใช้งานเป็นเวลานาน
-
-### GetServerMetrics
-```go
-func (p *ProxyServer) GetServerMetrics() *Metrics
-```
-คืนค่าข้อมูลสถิติการทำงานของเซิร์ฟเวอร์
-
-### ValidateInput
-```go
-func ValidateInput(data []byte) bool
-```
-ตรวจสอบความถูกต้องของข้อมูลที่รับเข้ามา
-
-### SanitizeOutput
-```go
-func SanitizeOutput(data []byte) []byte
-```
-ทำความสะอาดข้อมูลก่อนส่งออก
-
-## การใช้งานพื้นฐาน
-
-### การเริ่มต้น Proxy
-```go
-proxy.Setup() // เริ่มต้น Proxy ในไฟล์ main.go
+### การตั้งค่าใน config.ini
+```ini
+APIHost=localhost
+APIPort=3000
+APIPath=/api/speakers
+TCPServerPort=20000
+APIKey=your-api-key
 ```
 
-### การส่งข้อมูลไปยังไคลเอนต์
+## การทำงาน
+1. **การเริ่มต้น**
+   - โหลดการตั้งค่าจาก config.ini
+   - เริ่มต้นระบบ logging
+   - เริ่ม TCP Server
+   - เริ่ม REST API Server
+
+2. **การจัดการการเชื่อมต่อ**
+   - รับการเชื่อมต่อจากไคลเอนต์
+   - ตรวจสอบจำนวนการเชื่อมต่อ
+   - ตั้งค่า keep-alive และ timeout
+   - จัดการการเชื่อมต่อที่ขาดหาย
+
+3. **การดึงข้อมูล**
+   - ดึงข้อมูลจาก API ทุก 750ms
+   - ตรวจสอบการเปลี่ยนแปลงของสถานะไมค์
+   - อัปเดตสถานะใน config
+
+4. **การส่งข้อมูล**
+   - ส่ง XML เมื่อมีการเปลี่ยนแปลงสถานะ
+   - ส่ง SeatActivity สำหรับไมค์แต่ละตัว
+   - ส่ง DiscussionActivity สำหรับไมค์ทั้งหมด
+   - รอ 500ms ก่อนส่งไมค์ตัวต่อไป
+
+5. **การจัดการข้อผิดพลาด**
+   - บันทึกข้อผิดพลาดลง log
+   - ทำการ retry เมื่อเกิดข้อผิดพลาด
+   - ปิดการเชื่อมต่อที่ไม่สามารถส่งข้อมูลได้
+
+## การใช้งาน
+### การเริ่มต้น
 ```go
-data := []byte("Hello, World!")
-proxy.Broadcast(data)
+// เริ่มต้นการทำงาน
+proxy.Setup()
 ```
 
-### การตรวจสอบสถิติการทำงาน
+### การตรวจสอบสถานะ
 ```go
+// ตรวจสอบสถานะ TCP Server
+status := config.Config.TCPServerStatus
+
+// ตรวจสอบสถานะ API
+status := config.Config.APIStatus
+
+// ตรวจสอบจำนวนการเชื่อมต่อ
 metrics := proxy.GetServerMetrics()
 fmt.Printf("จำนวนการเชื่อมต่อปัจจุบัน: %d\n", metrics.CurrentConnections)
 ```
 
-## ตัวอย่างรหัสเพิ่มเติม
-
-### การแตกเช่น XML ออกเป็นส่วนๆ
+### การหยุดการทำงาน
 ```go
-// สร้าง XML สำหรับข้อมูลที่นั่ง
-seatXML := xml.GenerateSeatXML(speaker, microphoneActive)
-
-// สร้าง header สำหรับ XML
-header := make([]byte, 8)
-binary.LittleEndian.PutUint32(header[0:4], 5) // ประเภทข้อมูล
-binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML))) // ความยาวข้อมูล
-
-// ส่งข้อมูลไปยังไคลเอนต์ทั้งหมด
-proxy.Broadcast(append(header, seatXML...))
+// หยุดการทำงาน
+proxy.StopProxy()
 ```
 
-### การจัดการข้อผิดพลาด
-```go
-err := api.GetSpeakers()
-if err != nil {
-    proxy.metrics.RecordError("API", fmt.Errorf("Cannot fetch speakers data: %v", err))
-    fmt.Println("⚠️ Cannot fetch speakers data:", err)
-    config.Config.UpdateAPIStatus("Cannot connect to API: " + err.Error())
-}
-```
+## การแก้ไขปัญหา
+1. **การเชื่อมต่อ API ล้มเหลว**
+   - ตรวจสอบการตั้งค่า API ใน config.ini
+   - ตรวจสอบการเชื่อมต่อเครือข่าย
+   - ตรวจสอบว่า API server ทำงานอยู่
 
-## คำแนะนำในการพัฒนาต่อ
+2. **การเชื่อมต่อ TCP ล้มเหลว**
+   - ตรวจสอบว่า port 20000 ว่าง
+   - ตรวจสอบการตั้งค่า firewall
+   - ตรวจสอบการเชื่อมต่อเครือข่าย
 
-1. การเพิ่มการรองรับการเชื่อมต่อแบบ WebSocket
-   - สร้างไฟล์ใหม่ เช่น `websocket.go` สำหรับการจัดการการเชื่อมต่อแบบ WebSocket
-   - เพิ่มโครงสร้าง `WebSocketClient` และฟังก์ชันที่เกี่ยวข้อง
+3. **ข้อมูลที่ส่งไม่ถูกต้อง**
+   - ตรวจสอบการแปลงข้อมูลเป็น XML
+   - ตรวจสอบ format ของข้อมูลที่ส่ง
+   - ตรวจสอบการเข้ารหัส UTF-16LE
 
-2. การเพิ่มการรองรับการเข้ารหัสข้อมูล
-   - เพิ่มฟังก์ชัน `EncryptData` และ `DecryptData` สำหรับการเข้ารหัสและถอดรหัสข้อมูล
-   - เพิ่มการตั้งค่าสำหรับการเข้ารหัสในไฟล์ `config.ini`
+## การบำรุงรักษา
+1. **การตรวจสอบ log**
+   - ตรวจสอบไฟล์ log ในโฟลเดอร์ logs
+   - ตรวจสอบข้อผิดพลาดที่เกิดขึ้น
+   - ตรวจสอบการทำงานของระบบ
 
-3. การเพิ่มการจำกัดการใช้งานตามที่อยู่ IP
-   - เพิ่มฟังก์ชัน `IsIPAllowed` สำหรับการตรวจสอบว่าที่อยู่ IP ได้รับอนุญาตหรือไม่
-   - เพิ่มการตั้งค่าสำหรับการจำกัดการใช้งานในไฟล์ `config.ini` 
+2. **การทำความสะอาด**
+   - ลบไฟล์ log เก่า
+   - ตรวจสอบการใช้หน่วยความจำ
+   - ตรวจสอบการทำงานของ goroutine
+
+3. **การอัปเดต**
+   - อัปเดตการตั้งค่าใน config.ini
+   - อัปเดตรุ่นของโปรแกรม
+   - อัปเดตการตั้งค่า API 

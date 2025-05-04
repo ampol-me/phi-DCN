@@ -21,9 +21,9 @@ import (
 
 // ตัวแปรสำหรับการ logging
 var (
-	InfoLogger  *log.Logger
-	ErrorLogger *log.Logger
-	DebugLogger *log.Logger
+	activityLogger *log.Logger
+	ErrorLogger    *log.Logger
+	DebugLogger    *log.Logger
 )
 
 // ค่าคงที่สำหรับการตั้งค่า
@@ -85,26 +85,43 @@ type Metrics struct {
 
 // สร้าง logging system
 func initLogging() {
+	// สร้างโครงสร้างโฟลเดอร์ logs/YYYY/MM/DD
+	currentTime := time.Now()
+	logsDir := "logs"
+	yearDir := fmt.Sprintf("%s/%d", logsDir, currentTime.Year())
+	monthDir := fmt.Sprintf("%s/%02d", yearDir, currentTime.Month())
+	dayDir := fmt.Sprintf("%s/%02d", monthDir, currentTime.Day())
+
+	// สร้างโฟลเดอร์ทั้งหมด
+	dirs := []string{logsDir, yearDir, monthDir, dayDir}
+	for _, dir := range dirs {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			os.Mkdir(dir, 0755)
+		}
+	}
+
 	// สร้างโฟลเดอร์ logs ถ้ายังไม่มี
 	if _, err := os.Stat("logs"); os.IsNotExist(err) {
 		os.Mkdir("logs", 0755)
 	}
 
 	// เปิดไฟล์ log
-	currentTime := time.Now().Format("2006-01-02")
-	infoFile, err := os.OpenFile(fmt.Sprintf("logs/info_%s.log", currentTime), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	//currentTime := time.Now().Format("2006-01-02")
+	// เปิดไฟล์ log
+	activityFile, err := os.OpenFile(fmt.Sprintf("%s/app_activity.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
 
-	errorFile, err := os.OpenFile(fmt.Sprintf("logs/error_%s.log", currentTime), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// เปิดไฟล์ log
+	systemErrorFile, err := os.OpenFile(fmt.Sprintf("%s/system_error.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
 
 	// สร้าง logger
-	InfoLogger = log.New(infoFile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	ErrorLogger = log.New(errorFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	activityLogger = log.New(activityFile, "ACTIVITY: ", log.Ldate|log.Ltime|log.Lshortfile)
+	ErrorLogger = log.New(systemErrorFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	DebugLogger = log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
@@ -183,7 +200,7 @@ func (p *ProxyServer) AddClient(conn net.Conn) (*Client, error) {
 	go p.handleClientSend(client)
 
 	fmt.Printf("👥 Client %d connected: %s\n", client.id, remoteAddr)
-	InfoLogger.Printf("Client %d connected: %s", client.id, remoteAddr)
+	activityLogger.Printf("Client %d connected: %s", client.id, remoteAddr)
 	return client, nil
 }
 
@@ -206,7 +223,7 @@ func (p *ProxyServer) RemoveClient(id int) {
 		config.Config.RemoveActiveClient(ipAddress)
 
 		fmt.Printf("👋 Client %d disconnected: %s\n", id, remoteAddr)
-		InfoLogger.Printf("Client %d disconnected: %s", id, remoteAddr)
+		activityLogger.Printf("Client %d disconnected: %s", id, remoteAddr)
 
 		client.conn.Close()
 
@@ -348,6 +365,7 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 
 					// เคลียร์สถานะไมค์ใน config
 					config.Config.UpdateActiveMic(speaker.SeatName, false)
+
 				}
 
 				// ส่ง DiscussionActivity ว่าง
@@ -361,6 +379,8 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 				currentSpeakers = []api.Speaker{}
 				speakerStates = make(map[int]bool)
 				allMicsOffSent = true
+				activityLogger.Println("SeatActivity OFF: All mics off")
+				fmt.Println("SeatActivity OFF: All mics off")
 			}
 			time.Sleep(time.Second)
 			continue
@@ -378,6 +398,10 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 				binary.LittleEndian.PutUint32(header[0:4], 5)
 				binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
 				p.Broadcast(append(header, seatXML...))
+
+				// บันทึกกิจกรรม
+				activityLogger.Printf("Mic ON: %s", speaker.SeatName)
+				fmt.Printf("Mic ON: %s\n", speaker.SeatName)
 
 				// อัปเดตสถานะ
 				speakerStates[speaker.ID] = true
@@ -410,6 +434,9 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 						binary.LittleEndian.PutUint32(header[0:4], 5)
 						binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
 						p.Broadcast(append(header, seatXML...))
+						// บันทึกกิจกรรม
+						activityLogger.Printf("Mic OFF: %s", speaker.SeatName)
+						fmt.Printf("Mic OFF: %s\n", speaker.SeatName)
 
 						// เคลียร์สถานะไมค์ใน config
 						config.Config.UpdateActiveMic(speaker.SeatName, false)
@@ -437,6 +464,9 @@ func (p *ProxyServer) ProcessAndBroadcast() {
 				binary.LittleEndian.PutUint32(header[0:4], 5)
 				binary.LittleEndian.PutUint32(header[4:8], uint32(len(seatXML)))
 				p.Broadcast(append(header, seatXML...))
+				// บันทึกกิจกรรม
+				activityLogger.Printf("Mic OFF: %s", speaker.SeatName)
+				fmt.Printf("Mic OFF: %s\n", speaker.SeatName)
 
 				// เคลียร์สถานะไมค์ใน config
 				config.Config.UpdateActiveMic(speaker.SeatName, false)
@@ -498,7 +528,7 @@ func StartProxy() {
 
 	// อัปเดตสถานะของ server
 	config.Config.UpdateTCPServerStatus("Initializing...")
-	InfoLogger.Println("TCP Server initializing...")
+	activityLogger.Println("TCP Server initializing...")
 
 	// เริ่ม proxy server ที่ port 20000
 	var err error
@@ -529,7 +559,7 @@ func StartProxy() {
 		statusMsg := fmt.Sprintf("Listening on port %s (PID: %d)", port, proxy.pid)
 		config.Config.UpdateTCPServerStatus("Running")
 		fmt.Printf("🚀 %s\n", statusMsg)
-		InfoLogger.Println(statusMsg)
+		activityLogger.Println(statusMsg)
 
 		// เริ่ม goroutine สำหรับดึงข้อมูลจาก API
 		go proxy.ProcessAndBroadcast()
@@ -596,7 +626,7 @@ func StopProxy(proxy *ProxyServer) {
 			cmd.Run()
 		}
 
-		InfoLogger.Println("TCP Server stopped")
+		activityLogger.Println("TCP Server stopped")
 		config.Config.UpdateTCPServerStatus("Stopped")
 	}
 }
