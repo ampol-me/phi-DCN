@@ -56,17 +56,15 @@ else
     echo -e "${YELLOW}⚠️ Warning: README.md not found at $ROOT_DIR/README.md${NC}"
 fi
 
-# สร้างไฟล์ .exe
+# สร้างไฟล์ .exe พร้อมไอคอน
 echo "🚀 Building Windows executable..."
 cd "$ROOT_DIR"
-GOOS=$PLATFORM GOARCH=$ARCH go build -o "$OUTPUT_DIR/$APP_NAME.exe" ./client
+GOOS=$PLATFORM GOARCH=$ARCH go build -ldflags="-H windowsgui" -o "$OUTPUT_DIR/$APP_NAME.exe" ./client
 
 # ตรวจสอบว่าสร้างไฟล์สำเร็จหรือไม่
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Build successful!${NC}"
-    echo "📦 Output directory: $OUTPUT_DIR"
-    echo "📄 Files:"
-    ls -la "$OUTPUT_DIR"
+    echo -e "${GREEN}✅ Build completed successfully!${NC}"
+    echo -e "${GREEN}Output: $OUTPUT_DIR/$APP_NAME.exe${NC}"
 else
     echo -e "${RED}❌ Build failed!${NC}"
     exit 1

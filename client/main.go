@@ -14,6 +14,7 @@ import (
 	"phi-DCN/client/proxy"
 
 	"fyne.io/systray"
+	"github.com/lxn/walk"
 )
 
 const (
@@ -27,6 +28,7 @@ const (
 var (
 	InfoLogger  *log.Logger
 	ErrorLogger *log.Logger
+	mainWindow  *walk.MainWindow
 )
 
 // initLogging เริ่มต้นระบบบันทึกข้อมูล
@@ -78,20 +80,65 @@ func onReady() {
 	systray.SetTooltip("Phi DCN Bridge is running")
 
 	// เพิ่มเมนู
+	mShow := systray.AddMenuItem("Show Window", "Show the application window")
+	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit the application")
+
+	// จัดการการคลิกที่ไอคอนใน system tray
+	go func() {
+		for {
+			select {
+			case <-mShow.ClickedCh:
+				showMainWindow()
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+				os.Exit(0)
+			}
+		}
+	}()
 
 	// ซ่อนหน้าต่างแอปพลิเคชัน
 	if runtime.GOOS == "windows" {
-		// บน Windows จะซ่อนหน้าต่างโดยอัตโนมัติเมื่อแสดงใน system tray
-		// ไม่จำเป็นต้องใช้โค้ดเพิ่มเติม
+		hideMainWindow()
+	}
+}
+
+// showMainWindow แสดงหน้าต่างหลัก
+func showMainWindow() {
+	if mainWindow != nil {
+		mainWindow.Show()
+		mainWindow.SetMinMaxSize(walk.Size{Width: 800, Height: 600}, walk.Size{Width: 800, Height: 600})
+		mainWindow.SetSize(walk.Size{Width: 800, Height: 600})
+		mainWindow.SetVisible(true)
+	}
+}
+
+// hideMainWindow ซ่อนหน้าต่างหลัก
+func hideMainWindow() {
+	if mainWindow != nil {
+		mainWindow.SetVisible(false)
+	}
+}
+
+// createMainWindow สร้างหน้าต่างหลัก
+func createMainWindow() error {
+	var err error
+	mainWindow, err = walk.NewMainWindow()
+	if err != nil {
+		return err
 	}
 
-	// รอการกดปุ่มจากผู้ใช้
-	go func() {
-		<-mQuit.ClickedCh
-		systray.Quit()
-		os.Exit(0)
-	}()
+	mainWindow.SetTitle("Phi DCN Bridge")
+	mainWindow.SetMinMaxSize(walk.Size{Width: 800, Height: 600}, walk.Size{Width: 800, Height: 600})
+	mainWindow.SetSize(walk.Size{Width: 800, Height: 600})
+
+	// จัดการการปิดหน้าต่าง
+	mainWindow.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
+		*canceled = true
+		hideMainWindow()
+	})
+
+	return nil
 }
 
 func onExit() {
@@ -210,13 +257,19 @@ func main() {
 	fmt.Printf("- TCP Server port: %s (not started yet)\n", config.Config.TCPServerPort)
 	fmt.Printf("- Connected to API: %s\n\n", config.Config.GetAPIURL())
 
-	// ถ้าเป็น Windows ให้เริ่ม systray
+	// ถ้าเป็น Windows ให้เริ่ม systray และแสดงหน้าต่างหลัก
 	if runtime.GOOS == "windows" {
+		if err := createMainWindow(); err != nil {
+			ErrorLogger.Printf("Failed to create main window: %v", err)
+			os.Exit(1)
+		}
 		go systray.Run(onReady, onExit)
+		mainWindow.Show()
+		mainWindow.Run()
+	} else {
+		// รอให้แอปพลิเคชันทำงานต่อไป
+		select {}
 	}
-
-	// รอให้แอปพลิเคชันทำงานต่อไป
-	select {}
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน
