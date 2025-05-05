@@ -20,6 +20,13 @@ fi
 
 echo -e "${BLUE}🔨 Building phi-DCN version ${VERSION} for Windows${NC}"
 
+# ตรวจสอบ dependencies
+echo "Checking dependencies..."
+if ! command -v go &> /dev/null; then
+    echo -e "${RED}Error: Go is not installed${NC}"
+    exit 1
+fi
+
 # ตั้งค่าตัวแปร
 APP_NAME="phi-dcn-bridge"
 PLATFORM="windows"
@@ -76,8 +83,8 @@ fi
 echo "🚀 Building Windows executable..."
 cd "$ROOT_DIR"
 
-# ตั้งค่า CGO_ENABLED=0 สำหรับ cross-compile
-export CGO_ENABLED=0
+# ตั้งค่า CGO_ENABLED=1 เพื่อให้สามารถใช้ native libraries ได้
+export CGO_ENABLED=1
 
 # Build สำหรับ Windows
 GOOS=$PLATFORM GOARCH=$ARCH go build -ldflags="-H windowsgui" -o "$OUTPUT_DIR/$APP_NAME.exe" ./client

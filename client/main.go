@@ -42,7 +42,9 @@ func initLogging() {
 	dirs := []string{logsDir, yearDir, monthDir, dayDir}
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			os.MkdirAll(dir, 0755)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				log.Fatalf("ไม่สามารถสร้างโฟลเดอร์ log ได้: %v", err)
+			}
 		}
 	}
 
@@ -78,17 +80,14 @@ func onReady() {
 	systray.SetTooltip("Phi DCN Bridge is running")
 
 	// เพิ่มเมนู
-	mShow := systray.AddMenuItem("Show Window", "Show the application window")
-	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit the application")
 
 	// จัดการการคลิกที่ไอคอนใน system tray
 	go func() {
 		for {
 			select {
-			case <-mShow.ClickedCh:
-				showMainWindow()
 			case <-mQuit.ClickedCh:
+				ErrorLogger.Println("User requested application quit")
 				systray.Quit()
 				os.Exit(0)
 			}
@@ -96,51 +95,38 @@ func onReady() {
 	}()
 }
 
-// showMainWindow แสดงหน้าต่างหลัก
-func showMainWindow() {
-	// TODO: Implement window showing logic
-	fmt.Println("Show window clicked")
-}
-
-// hideMainWindow ซ่อนหน้าต่างหลัก
-func hideMainWindow() {
-	// TODO: Implement window hiding logic
-	fmt.Println("Hide window clicked")
-}
-
-// createMainWindow สร้างหน้าต่างหลัก
-func createMainWindow() error {
-	// Implementation of createMainWindow function
-	return nil
-}
-
 func onExit() {
 	// ทำความสะอาด resources
+	InfoLogger.Println("Cleaning up resources...")
 	config.Config.ClearInactiveMics()
+	InfoLogger.Println("Cleanup completed")
 }
 
 func main() {
 	// เริ่มต้นระบบบันทึกข้อมูล
 	initLogging()
-
-	// สร้างหน้าต่างหลัก
-	if err := createMainWindow(); err != nil {
-		ErrorLogger.Printf("Failed to create main window: %v", err)
-		os.Exit(1)
-	}
+	InfoLogger.Println("Starting application...")
 
 	// ตั้งค่าเริ่มต้น - โหลดจากไฟล์ config.ini
 	if err := config.InitConfig(); err != nil {
-		fmt.Printf("❌ Failed to load configuration: %v\n", err)
-		ErrorLogger.Printf("Failed to load configuration: %v", err)
+		errorMsg := fmt.Sprintf("Failed to load configuration: %v", err)
+		fmt.Printf("❌ %s\n", errorMsg)
+		ErrorLogger.Printf(errorMsg)
+		fmt.Println("\nPlease check your configuration file (config.ini) and restart the application.")
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
 		os.Exit(1)
 	}
 	InfoLogger.Println("Configuration loaded successfully")
 
 	// ตรวจสอบความถูกต้องของการตั้งค่า
 	if err := config.Config.ValidateConfig(); err != nil {
-		fmt.Printf("❌ Invalid configuration: %v\n", err)
-		ErrorLogger.Printf("Invalid configuration: %v", err)
+		errorMsg := fmt.Sprintf("Invalid configuration: %v", err)
+		fmt.Printf("❌ %s\n", errorMsg)
+		ErrorLogger.Printf(errorMsg)
+		fmt.Println("\nPlease check your configuration file (config.ini) and restart the application.")
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
 		os.Exit(1)
 	}
 
@@ -178,14 +164,13 @@ func main() {
 
 	apiCheckChan := make(chan error, 1)
 	go func() {
-		// ใช้ retry mechanism
 		var err error
-		for i := 0; i < 3; i++ { // ลองเชื่อมต่อ 3 ครั้ง
+		for i := 0; i < 3; i++ {
 			err = api.TestConnection()
 			if err == nil {
 				break
 			}
-			time.Sleep(500 * time.Millisecond) // รอสักครู่ก่อนลองอีกครั้ง
+			time.Sleep(500 * time.Millisecond)
 		}
 		apiCheckChan <- err
 	}()
@@ -193,9 +178,9 @@ func main() {
 	select {
 	case err := <-apiCheckChan:
 		if err != nil {
-			fmt.Printf("\n❌ API connection failed: %v\n", err)
-			ErrorLogger.Printf("API connection failed: %v", err)
-
+			errorMsg := fmt.Sprintf("API connection failed: %v", err)
+			fmt.Printf("\n❌ %s\n", errorMsg)
+			ErrorLogger.Printf(errorMsg)
 			fmt.Println("\nPossible causes:")
 			fmt.Println("1. API server is not running")
 			fmt.Println("2. Incorrect API configuration")
@@ -207,14 +192,16 @@ func main() {
 			fmt.Printf("- API Key: %s\n", config.Config.APIKey)
 			fmt.Println("\nPlease update your configuration using:")
 			fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
+			fmt.Println("\nPress Enter to exit...")
+			fmt.Scanln()
 			os.Exit(1)
 		}
 		fmt.Println("✅ API connection successful")
 		InfoLogger.Println("API connection successful")
 	case <-time.After(API_TIMEOUT):
-		fmt.Printf("\n❌ API connection timeout after %v\n", API_TIMEOUT)
-		ErrorLogger.Printf("API connection timeout after %v", API_TIMEOUT)
-
+		errorMsg := fmt.Sprintf("API connection timeout after %v", API_TIMEOUT)
+		fmt.Printf("\n❌ %s\n", errorMsg)
+		ErrorLogger.Printf(errorMsg)
 		fmt.Println("\nPossible causes:")
 		fmt.Println("1. API server is not responding")
 		fmt.Println("2. Network latency is too high")
@@ -226,6 +213,8 @@ func main() {
 		fmt.Printf("- API Key: %s\n", config.Config.APIKey)
 		fmt.Println("\nPlease update your configuration using:")
 		fmt.Printf("curl -X POST http://localhost:%s/api/config -H \"Content-Type: application/json\" -d '{\"APIHost\":\"your-api-host\",\"APIPort\":\"your-api-port\",\"APIPath\":\"/api/speakers\",\"APIKey\":\"your-api-key\"}'\n", apiPort)
+		fmt.Println("\nPress Enter to exit...")
+		fmt.Scanln()
 		os.Exit(1)
 	}
 
@@ -237,10 +226,7 @@ func main() {
 	fmt.Printf("- Connected to API: %s\n\n", config.Config.GetAPIURL())
 
 	// เริ่ม systray
-	go systray.Run(onReady, onExit)
-
-	// แสดงหน้าต่างหลัก
-	showMainWindow()
+	systray.Run(onReady, onExit)
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน
@@ -250,14 +236,9 @@ func setupSignalHandler() {
 
 	go func() {
 		<-c
-		fmt.Println("\nShutting down application...")
-		InfoLogger.Println("Shutting down application...")
-
-		// ทำความสะอาด resources
-		config.Config.ClearInactiveMics()
-
-		fmt.Println("Application closed successfully")
-		InfoLogger.Println("Application closed successfully")
+		ErrorLogger.Println("Received termination signal")
+		fmt.Println("\nReceived termination signal. Cleaning up...")
+		onExit()
 		os.Exit(0)
 	}()
 }
