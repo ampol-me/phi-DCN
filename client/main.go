@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -34,25 +34,25 @@ func initLogging() {
 	// สร้างโครงสร้างโฟลเดอร์ logs/YYYY/MM/DD
 	currentTime := time.Now()
 	logsDir := "logs"
-	yearDir := fmt.Sprintf("%s/%d", logsDir, currentTime.Year())
-	monthDir := fmt.Sprintf("%s/%02d", yearDir, currentTime.Month())
-	dayDir := fmt.Sprintf("%s/%02d", monthDir, currentTime.Day())
+	yearDir := filepath.Join(logsDir, fmt.Sprintf("%d", currentTime.Year()))
+	monthDir := filepath.Join(yearDir, fmt.Sprintf("%02d", currentTime.Month()))
+	dayDir := filepath.Join(monthDir, fmt.Sprintf("%02d", currentTime.Day()))
 
 	// สร้างโฟลเดอร์ทั้งหมด
 	dirs := []string{logsDir, yearDir, monthDir, dayDir}
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			os.Mkdir(dir, 0755)
+			os.MkdirAll(dir, 0755)
 		}
 	}
 
 	// เปิดไฟล์ log
-	infoFile, err := os.OpenFile(fmt.Sprintf("%s/app_info.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	infoFile, err := os.OpenFile(filepath.Join(dayDir, "app_info.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
 
-	errorFile, err := os.OpenFile(fmt.Sprintf("%s/app_error.log", dayDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	errorFile, err := os.OpenFile(filepath.Join(dayDir, "app_error.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("ไม่สามารถเปิดไฟล์ log ได้: %v", err)
 	}
@@ -78,20 +78,40 @@ func onReady() {
 	systray.SetTooltip("Phi DCN Bridge is running")
 
 	// เพิ่มเมนู
+	mShow := systray.AddMenuItem("Show Window", "Show the application window")
+	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit the application")
 
-	// ซ่อนหน้าต่างแอปพลิเคชัน
-	if runtime.GOOS == "windows" {
-		// บน Windows จะซ่อนหน้าต่างโดยอัตโนมัติเมื่อแสดงใน system tray
-		// ไม่จำเป็นต้องใช้โค้ดเพิ่มเติม
-	}
-
-	// รอการกดปุ่มจากผู้ใช้
+	// จัดการการคลิกที่ไอคอนใน system tray
 	go func() {
-		<-mQuit.ClickedCh
-		systray.Quit()
-		os.Exit(0)
+		for {
+			select {
+			case <-mShow.ClickedCh:
+				showMainWindow()
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+				os.Exit(0)
+			}
+		}
 	}()
+}
+
+// showMainWindow แสดงหน้าต่างหลัก
+func showMainWindow() {
+	// TODO: Implement window showing logic
+	fmt.Println("Show window clicked")
+}
+
+// hideMainWindow ซ่อนหน้าต่างหลัก
+func hideMainWindow() {
+	// TODO: Implement window hiding logic
+	fmt.Println("Hide window clicked")
+}
+
+// createMainWindow สร้างหน้าต่างหลัก
+func createMainWindow() error {
+	// Implementation of createMainWindow function
+	return nil
 }
 
 func onExit() {
@@ -102,6 +122,12 @@ func onExit() {
 func main() {
 	// เริ่มต้นระบบบันทึกข้อมูล
 	initLogging()
+
+	// สร้างหน้าต่างหลัก
+	if err := createMainWindow(); err != nil {
+		ErrorLogger.Printf("Failed to create main window: %v", err)
+		os.Exit(1)
+	}
 
 	// ตั้งค่าเริ่มต้น - โหลดจากไฟล์ config.ini
 	if err := config.InitConfig(); err != nil {
@@ -210,13 +236,11 @@ func main() {
 	fmt.Printf("- TCP Server port: %s (not started yet)\n", config.Config.TCPServerPort)
 	fmt.Printf("- Connected to API: %s\n\n", config.Config.GetAPIURL())
 
-	// ถ้าเป็น Windows ให้เริ่ม systray
-	if runtime.GOOS == "windows" {
-		go systray.Run(onReady, onExit)
-	}
+	// เริ่ม systray
+	go systray.Run(onReady, onExit)
 
-	// รอให้แอปพลิเคชันทำงานต่อไป
-	select {}
+	// แสดงหน้าต่างหลัก
+	showMainWindow()
 }
 
 // setupSignalHandler จัดการกับสัญญาณหยุดการทำงาน

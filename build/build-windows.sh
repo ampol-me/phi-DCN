@@ -31,6 +31,7 @@ ICON_DST="$OUTPUT_DIR/assets/icon.ico"
 # สร้างโฟลเดอร์ output ถ้ายังไม่มี
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/assets"
+mkdir -p "$OUTPUT_DIR/config/backup"
 
 # คัดลอกไฟล์ไอคอน
 if [ -f "$ICON_SRC" ]; then
@@ -74,14 +75,17 @@ fi
 # สร้างไฟล์ .exe
 echo "🚀 Building Windows executable..."
 cd "$ROOT_DIR"
-GOOS=$PLATFORM GOARCH=$ARCH go build -o "$OUTPUT_DIR/$APP_NAME.exe" ./client
+
+# ตั้งค่า CGO_ENABLED=0 สำหรับ cross-compile
+export CGO_ENABLED=0
+
+# Build สำหรับ Windows
+GOOS=$PLATFORM GOARCH=$ARCH go build -ldflags="-H windowsgui" -o "$OUTPUT_DIR/$APP_NAME.exe" ./client
 
 # ตรวจสอบว่าสร้างไฟล์สำเร็จหรือไม่
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Build successful!${NC}"
-    echo "📦 Output directory: $OUTPUT_DIR"
-    echo "📄 Files:"
-    ls -la "$OUTPUT_DIR"
+    echo -e "${GREEN}✅ Build completed successfully!${NC}"
+    echo -e "${GREEN}Output: $OUTPUT_DIR/$APP_NAME.exe${NC}"
 else
     echo -e "${RED}❌ Build failed!${NC}"
     exit 1
