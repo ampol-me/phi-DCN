@@ -173,7 +173,7 @@ func syncWithServer() error {
 		return fmt.Errorf("failed to marshal license: %v", err)
 	}
 
-	resp, err := client.Post("http://lic.phim.in.th/api/license/validate", "application/json", strings.NewReader(string(data)))
+	resp, err := client.Post("https://license-manager.nuxt.dev/api/license/validate", "application/json", strings.NewReader(string(data)))
 	if err != nil {
 		return fmt.Errorf("failed to sync with server: %v", err)
 	}
@@ -298,7 +298,7 @@ func loadLicenseFromServer(licenseKey string) error {
 	// ส่ง request ไปยัง server
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(
-		"http://lic.phim.in.th/api/license/validate",
+		"https://license-manager.nuxt.dev/api/license/validate",
 		"application/json",
 		strings.NewReader(string(data)),
 	)
