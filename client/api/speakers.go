@@ -16,10 +16,73 @@ type Speaker struct {
 	ID            int    `json:"id"`
 	Name          string `json:"name"`
 	SeatName      string `json:"seatName"`
-	Prio          int    `json:"prio"`
-	PrioOn        int    `json:"prioOn"`
+	Prio          int    `json:"-"`
+	PrioOn        int    `json:"-"`
 	ParticipantID int    `json:"participantId"`
-	MicOn         int    `json:"micOn"`
+	MicOn         int    `json:"-"`
+}
+
+// UnmarshalJSON จัดการกับการแปลงค่า JSON ให้เข้ากับโครงสร้าง Speaker
+func (s *Speaker) UnmarshalJSON(data []byte) error {
+	// สร้างโครงสร้างชั่วคราวที่มีฟิลด์เป็น interface{} สำหรับฟิลด์ที่อาจเป็นได้ทั้ง boolean และ int
+	type SpeakerTemp struct {
+		ID            int         `json:"id"`
+		Name          string      `json:"name"`
+		SeatName      string      `json:"seatName"`
+		Prio          interface{} `json:"prio"`
+		PrioOn        interface{} `json:"prioOn"`
+		ParticipantID int         `json:"participantId"`
+		MicOn         interface{} `json:"micOn"`
+	}
+
+	var temp SpeakerTemp
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// คัดลอกค่าที่ไม่ต้องแปลง
+	s.ID = temp.ID
+	s.Name = temp.Name
+	s.SeatName = temp.SeatName
+	s.ParticipantID = temp.ParticipantID
+
+	// แปลงค่า Prio
+	switch v := temp.Prio.(type) {
+	case bool:
+		if v {
+			s.Prio = 1
+		} else {
+			s.Prio = 0
+		}
+	case float64: // JSON numbers แปลงเป็น float64
+		s.Prio = int(v)
+	}
+
+	// แปลงค่า PrioOn
+	switch v := temp.PrioOn.(type) {
+	case bool:
+		if v {
+			s.PrioOn = 1
+		} else {
+			s.PrioOn = 0
+		}
+	case float64:
+		s.PrioOn = int(v)
+	}
+
+	// แปลงค่า MicOn
+	switch v := temp.MicOn.(type) {
+	case bool:
+		if v {
+			s.MicOn = 1
+		} else {
+			s.MicOn = 0
+		}
+	case float64:
+		s.MicOn = int(v)
+	}
+
+	return nil
 }
 
 // สร้าง HTTP client แบบ global เพื่อ reuse connection
