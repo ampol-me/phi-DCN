@@ -173,3 +173,26 @@ XML Server ทำหน้าที่เป็นตัวกลางระห
 - `GET /api/test`: ทดสอบการเชื่อมต่อกับ API
 - `GET /api/start`: เริ่ม TCP Server
 - `GET /api/stop`: หยุด TCP Server
+
+
+สำหรับการ build Windows executable บน macOS โดยใช้ icon นั้น สามารถทำได้ครับ โดยมีขั้นตอนดังนี้:
+ต้องมีไฟล์ .rc (Resource Script) ที่อ้างอิงถึง icon
+ใช้ windres (Windows Resource Compiler) เพื่อแปลง .rc เป็น .syso
+เมื่อ build Go program จะใช้ .syso file โดยอัตโนมัติ
+ผมจะสร้างไฟล์ icon.rc ให้ครับ:
+```
+1 ICON "phi-xml-icon.ico" 
+windres -o icon.syso icon.rc
+```
+
+ติดตั้ง brew install mingw-w64
+
+x86_64-w64-mingw32-windres icon.rc -O coff -o icon.syso
+
+สำหรับการ build Windows executable บน macOS โดยใช้ icon นั้น สามารถทำได้ครับ โดยมีขั้นตอนดังนี้:
+ต้องมีไฟล์ .rc (Resource Script) ที่อ้างอิงถึง icon
+ใช้ windres (Windows Resource Compiler) เพื่อแปลง .rc เป็น .syso
+เมื่อ build Go program จะใช้ .syso file โดยอัตโนมัติ
+ผมจะสร้างไฟล์ icon.rc ให้ครับ:
+
+cd client && GOOS=windows GOARCH=amd64 go build -o ../phi-dcn-bridge.exe
