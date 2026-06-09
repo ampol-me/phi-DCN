@@ -1,0 +1,13 @@
+{
+  "id": "e4b50b87-97de-400b-8ab4-82fce963c1c3",
+  "key": "D-0d3c0f83-933d0160-b02445cc-16fd82c8",
+  "type": "discussion",
+  "expiryDate": "2029-05-04T08:51:50Z",
+  "maxClients": 2,
+  "features": "\"discussion\"",
+  "status": "active",
+  "createdAt": "2025-05-05T08:51:50Z",
+  "updatedAt": "2025-05-05T08:51:50Z",
+  "lastSync": "2026-06-08T12:18:55.972076+07:00",
+  "backupPath": "config/backup/license_20260608_121855.json"
+}
